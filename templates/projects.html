@@ -1,0 +1,202 @@
+{% extends "base.html" %} {% block content %}
+<h2>Projects</h2>
+
+<!-- Form to create a new project -->
+<form method="POST" class="mb-4">
+  <div class="row g-2">
+    <div class="col">
+      <input
+        type="text"
+        name="title"
+        class="form-control"
+        placeholder="Project Title"
+        required
+      />
+    </div>
+    <div class="col">
+      <input
+        type="text"
+        name="description"
+        class="form-control"
+        placeholder="Description"
+      />
+    </div>
+    <div class="col">
+      <input
+        type="number"
+        step="0.01"
+        name="hourly_rate"
+        class="form-control"
+        placeholder="Hourly Rate"
+      />
+    </div>
+    <div class="col">
+      <input type="date" name="deadline" class="form-control" />
+    </div>
+    <div class="col">
+      <button type="submit" class="btn btn-primary w-100">Add Project</button>
+    </div>
+  </div>
+</form>
+
+<!-- Project list -->
+{% for project in projects %}
+<div class="card mb-3">
+  <div class="card-body">
+    <h5 class="card-title">
+      {{ project.title }} {% if project.hourly_rate %} - ${{ project.hourly_rate
+      }}/hr{% endif %} {% if project.deadline %}
+      <span class="badge bg-secondary float-end"
+        >Due: {{ project.deadline.strftime('%Y-%m-%d')}}</span
+      >
+      {% endif %}
+    </h5>
+    <p class="card-text">{{ project.description }}</p>
+
+    <!-- Task Form -->
+    <form
+      method="POST"
+      action="{{ url_for('add_task', project_id=project.id) }}"
+      class="input-group mb-2"
+    >
+      <input
+        type="text"
+        name="task_name"
+        class="form-control"
+        placeholder="New Task"
+        required
+      />
+      <button type="submit" class="btn btn-success">Add Task</button>
+    </form>
+
+    <!-- Task List -->
+    <ul class="list-group">
+      {% for task in project.tasks %}
+      <li
+        class="list-group-item d-flex justify-content-between align-items-center {% if task.is_complete %}list-group-item-success{% endif %}"
+      >
+        <div>
+          {{ task.task_name }}
+          <small class="text-muted d-block">
+            Total Time:
+            <span id="total-time-{{ task.id }}">
+              {% set total_seconds = namespace(value=0) %} {% for entry in
+              task.time_entries if entry.duration %} {% set total_seconds.value
+              = total_seconds.value + entry.duration.total_seconds() %} {%
+              endfor %} {% set display_seconds = total_seconds.value | int %} {{
+              '%02d:%02d:%02d' % (display_seconds // 3600, (display_seconds %
+              3600) // 60, display_seconds % 60) }}
+            </span>
+          </small>
+        </div>
+        <div class="task-actions">
+          <button
+            class="btn btn-sm btn-outline-success start-timer-btn"
+            data-task-id="{{ task.id }}"
+          >
+            Start
+          </button>
+          <button
+            class="btn btn-sm btn-outline-danger stop-timer-btn"
+            data-task-id="{{ task.id }}"
+            style="display: none"
+          >
+            Stop
+          </button>
+          <a
+            href="{{ url_for('toggle_task', task_id=task.id) }}"
+            class="btn btn-sm btn-outline-primary ms-2"
+          >
+            {% if task.is_complete %}Undo{% else %}Complete{% endif %}
+          </a>
+        </div>
+      </li>
+      {% else %}
+      <li class="list-group-item">No tasks yet.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% else %}
+<p>No projects yet.</p>
+{% endfor %}
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Function to set the initial state of all timer buttons on page load
+    function initializeTimerStates() {
+      document.querySelectorAll(".task-actions").forEach((container) => {
+        const taskId =
+          container.querySelector(".start-timer-btn").dataset.taskId;
+        // Check if there is an active timer for this task
+        fetch(`/status_timer/${taskId}`) // We will create this new route
+          .then((response) => response.json())
+          .then((data) => {
+            const startBtn = container.querySelector(".start-timer-btn");
+            const stopBtn = container.querySelector(".stop-timer-btn");
+            if (data.is_running) {
+              startBtn.style.display = "none";
+              stopBtn.style.display = "inline-block";
+            } else {
+              startBtn.style.display = "inline-block";
+              stopBtn.style.display = "none";
+            }
+          });
+      });
+    }
+
+    // Start Timer Button
+    document.querySelectorAll(".start-timer-btn").forEach((button) => {
+      button.addEventListener("click", function () {
+        const taskId = this.dataset.taskId;
+        const stopBtn = document.querySelector(
+          `.stop-timer-btn[data-task-id="${taskId}"]`
+        );
+
+        // Disable button immediately to prevent double-clicks
+        this.disabled = true;
+
+        fetch(`/start_timer/${taskId}`, { method: "POST" })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              this.style.display = "none";
+              stopBtn.style.display = "inline-block";
+            } else {
+              alert(data.error || "Failed to start timer.");
+            }
+          })
+          .finally(() => {
+            // Re-enable button in case of an error
+            this.disabled = false;
+          });
+      });
+    });
+
+    // Stop Timer Button
+    document.querySelectorAll(".stop-timer-btn").forEach((button) => {
+      button.addEventListener("click", function () {
+        const taskId = this.dataset.taskId;
+
+        // Disable button immediately
+        this.disabled = true;
+
+        fetch(`/stop_timer/${taskId}`, { method: "POST" })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              // Reload to see updated total time.
+              location.reload();
+            } else {
+              alert(data.error || "Failed to stop timer.");
+            }
+          });
+        // No finally block here because the page reloads on success
+      });
+    });
+
+    // Run the initialization function when the page is ready
+    initializeTimerStates();
+  });
+</script>
+{% endblock %}

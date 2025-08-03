@@ -1,0 +1,107 @@
+{% extends "base.html" %} {% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <a
+      href="{{ url_for('projects') }}"
+      class="btn btn-outline-secondary btn-sm mb-2"
+      >&larr; Back to Projects</a
+    >
+    <h2>{{ project.title }}</h2>
+    <p class="lead text-muted">
+      For client:
+      <span class="fw-bold">{{ project.client.name }}</span>
+    </p>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">Task Checklist</h5>
+  </div>
+  <div class="card-body">
+    <form
+      action="{{ url_for('add_task', project_id=project.id) }}"
+      method="POST"
+      class="mb-3"
+    >
+      <div class="input-group">
+        <input
+          type="text"
+          name="task_description"
+          class="form-control"
+          placeholder="Add a new task..."
+          required
+        />
+        <button class="btn btn-primary" type="submit">Add Task</button>
+      </div>
+    </form>
+
+    <ul class="list-group">
+      {% for task in project.tasks %}
+      <li class="list-group-item d-flex align-items-center">
+        <input
+          class="form-check-input me-3 task-checkbox"
+          type="checkbox"
+          id="task-{{ task.id }}"
+          data-task-id="{{ task.id }}"
+          {%
+          if
+          task.is_completed
+          %}checked{%
+          endif
+          %}
+        />
+        <label
+          for="task-{{ task.id }}"
+          class="form-check-label {% if task.is_completed %}text-muted text-decoration-line-through{% endif %}"
+        >
+          {{ task.description }}
+        </label>
+      </li>
+      {% else %}
+      <li class="list-group-item text-muted">No tasks yet. Add one above!</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+{% endblock %} {% block scripts %}
+<script>
+  // Wait for the document to be fully loaded
+  document.addEventListener("DOMContentLoaded", function () {
+    // Get all the task checkboxes
+    const checkboxes = document.querySelectorAll(".task-checkbox");
+
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener("change", function () {
+        const taskId = this.dataset.taskId;
+        const isCompleted = this.checked;
+        const label = document.querySelector(`label[for="task-${taskId}"]`);
+
+        // Send a request to the server in the background
+        fetch(`/toggle_task/${taskId}`, {
+          method: "POST",
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              // If the server confirms success, update the style
+              if (isCompleted) {
+                label.classList.add(
+                  "text-muted",
+                  "text-decoration-line-through"
+                );
+              } else {
+                label.classList.remove(
+                  "text-muted",
+                  "text-decoration-line-through"
+                );
+              }
+            }
+          });
+      });
+    });
+  });
+</script>
+{% endblock %}

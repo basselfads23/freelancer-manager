@@ -49,8 +49,29 @@
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <span class="badge bg-secondary mb-2">{{ project.client.name }}</span>
-          <h5 class="mb-1">{{ project.title }}</h5>
+          <h5 class="mb-1">
+            <a
+              href="{{ url_for('project_detail', project_id=project.id) }}"
+              class="text-decoration-none text-dark"
+              >{{ project.title }}</a
+            >
+          </h5>
           <p class="mb-1 text-muted">{{ project.description }}</p>
+
+          {% if project.total_tasks > 0 %}
+          <div class="progress mt-2" style="height: 20px">
+            <div
+              class="progress-bar"
+              role="progressbar"
+              style="width: {{ (project.completed_tasks / project.total_tasks) * 100 }}%;"
+              aria-valuenow="{{ project.completed_tasks }}"
+              aria-valuemin="0"
+              aria-valuemax="{{ project.total_tasks }}"
+            >
+              {{ project.completed_tasks }} / {{ project.total_tasks }} Complete
+            </div>
+          </div>
+          {% endif %}
         </div>
         <div class="text-end">
           {% if project.days_left is not none %} {% if project.days_left < 0 %}

@@ -1,31 +1,22 @@
-# Freelancer Manager - v3.0.0
+# Freelancer Manager - v4.0
 
-A simple web application built with **Flask** to help freelancers manage their **projects, clients, and now, individual tasks**.
+Freelancer Manager is a web application designed to help freelance professionals organize their work, track projects, manage clients, and handle invoicing. This tool provides a centralized dashboard to keep all essential business information in one place.
 
----
+## Core Features (v4.0)
 
-## Features (v3.0)
-
-This version introduces **Task Management**, building upon the **project and client features from v2.0**.
-
-### Core Features
-
-- All features from **v2.0**, including:
-  - Project Management
-  - Client Management
-
-### **NEW: Detailed Project View**
-
-- Each project on the dashboard now links to a **dedicated detail page** (e.g., `/project/1`).
-
-### **NEW: Task Management**
-
-- Add **new tasks** to a project on its detail page.
-- View all tasks for a project in a **checklist format**.
-- Mark tasks as **complete** or **incomplete** via a simple checkbox.
-- Task status is **saved instantly** to the database.
-
-### **NEW: Project Progress Tracking**
-
-- The **main project dashboard** now displays a **progress indicator** for each project  
-  _(e.g., “2 of 5 tasks complete”)_.
+- **Secure User Authentication**: Each user has a private account. All data is linked to the logged-in user, ensuring privacy and security.
+- **Client Management**: Add, view, and delete clients to keep your contact list organized.
+- **Project & Task Tracking**:
+  - Create projects with titles, descriptions, and deadlines.
+  - Assign each project to a specific client.
+  - Add individual tasks to each project and mark them as complete.
+  - A progress bar on the projects page visualizes task completion.
+- **Financial Dashboard**: A dedicated dashboard provides key financial analytics at a glance:
+  - Total revenue collected from paid invoices.
+  - Total outstanding revenue from sent invoices.
+  - A breakdown of revenue generated per client.
+- **Invoicing System**:
+  - Create detailed invoices for any project.
+  - Add multiple line items with descriptions, quantities, and prices.
+  - Update invoice status (Draft, Sent, Paid) and set due dates.
+- **Project Notes**: Add and save private, freeform notes to any project for keeping track of ideas, client feedback, or other miscellaneous details.

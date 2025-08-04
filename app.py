@@ -1,3 +1,5 @@
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -8,8 +10,24 @@ app = Flask(__name__)
 # Configure SQLite database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///freelancer_manager.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = "znxyD\E_%'izc_;J**]Iow\"L£lM^f1x8vtA]:,pd)F5^}g1V=R"
+app.config['SECRET_KEY'] = r"znxyD\E_%'izc_;J**]Iow\"L£lM^f1x8vtA]:,pd)F5^}g1V=R"
 db = SQLAlchemy(app)
+
+# --- Authentication Setup ---
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' # Redirect to login page if user is not authenticated
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+# --- End of Authentication Setup ---
+
 migrate = Migrate(app, db)
 
 # -----------------------
@@ -22,6 +40,8 @@ class Client(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), nullable=True)
     projects = db.relationship('Project', backref='client', lazy=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
 
 class Project(db.Model):
     # ... (add the new 'tasks' relationship and helper properties)
@@ -30,6 +50,8 @@ class Project(db.Model):
     description = db.Column(db.Text, nullable=True)
     deadline = db.Column(db.Date, nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
     
     # NEW: Relationship to the Task model
     tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
@@ -58,17 +80,19 @@ class Task(db.Model):
     description = db.Column(db.String(200), nullable=False)
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 # -----------------------
 # Routes
 # -----------------------
 @app.route('/')
+@login_required
 def index():
-    # We'll make the projects page the main page
     return redirect(url_for('projects'))
 
 
 @app.route('/projects', methods=['GET', 'POST'])
+@login_required
 def projects():
     if request.method == 'POST':
         title = request.form.get('title')
@@ -85,46 +109,49 @@ def projects():
             title=title,
             description=description,
             deadline=deadline,
-            client_id=client_id 
+            client_id=client_id,
+            user_id=current_user.id 
         )
         
         db.session.add(new_project)
         db.session.commit()
         return redirect(url_for('projects'))
 
-    all_projects = Project.query.order_by(Project.deadline.asc()).all()
-    all_clients = Client.query.order_by(Client.name).all()
+    all_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.deadline.asc()).all()
+
+    all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
 
     return render_template('projects.html', projects=all_projects, clients=all_clients)
 
-# -----------------------
-# NEW: Project Detail Route
-# -----------------------
 @app.route('/project/<int:project_id>')
+@login_required
 def project_detail(project_id):
-    # Find the project by its ID, or return a 404 Not Found error if it doesn't exist
-    project = Project.query.get_or_404(project_id)
+
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     # The tasks are automatically available via the 'project.tasks' relationship we defined
     return render_template('project_detail.html', project=project)
 
 @app.route('/delete_project/<int:project_id>', methods=['POST'])
+@login_required
 def delete_project(project_id):
-    project_to_delete = Project.query.get_or_404(project_id)
+    project_to_delete = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     db.session.delete(project_to_delete)
     db.session.commit()
     return redirect(url_for('projects'))
 
 @app.route('/add_task/<int:project_id>', methods=['POST'])
+@login_required
 def add_task(project_id):
-    # Make sure the project exists
-    project = Project.query.get_or_404(project_id)
+
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     
     task_description = request.form.get('task_description')
     
     if task_description:
         new_task = Task(
             description=task_description,
-            project_id=project.id
+            project_id=project.id,
+            user_id=current_user.id
         )
         db.session.add(new_task)
         db.session.commit()
@@ -133,8 +160,9 @@ def add_task(project_id):
     return redirect(url_for('project_detail', project_id=project.id))
 
 @app.route('/toggle_task/<int:task_id>', methods=['POST'])
+@login_required
 def toggle_task(task_id):
-    task = Task.query.get_or_404(task_id)
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
     # Flip the boolean value
     task.is_completed = not task.is_completed
     db.session.commit()
@@ -142,22 +170,24 @@ def toggle_task(task_id):
     return {'success': True, 'is_completed': task.is_completed}
 
 @app.route('/clients', methods=['GET', 'POST'])
+@login_required
 def clients():
     if request.method == 'POST':
         name = request.form.get('name')
         email = request.form.get('email')
         
-        new_client = Client(name=name, email=email)
+        new_client = Client(name=name, email=email, user_id=current_user.id)
         db.session.add(new_client)
         db.session.commit()
         return redirect(url_for('clients'))
 
-    all_clients = Client.query.order_by(Client.name).all()
+    all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
     return render_template('clients.html', clients=all_clients)
 
 @app.route('/delete_client/<int:client_id>', methods=['POST'])
+@login_required
 def delete_client(client_id):
-    client_to_delete = Client.query.get_or_404(client_id)
+    client_to_delete = Client.query.filter_by(id=client_id, user_id=current_user.id).first_or_404()
     
     if client_to_delete.projects:
         flash(f'Cannot delete {client_to_delete.name}. They still have active projects.', 'danger')
@@ -167,6 +197,45 @@ def delete_client(client_id):
         flash(f'Client {client_to_delete.name} has been deleted.', 'success')
         
     return redirect(url_for('clients'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('projects'))
+        else:
+            flash('Invalid credentials. Please try again.', 'danger')
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Check if username already exists
+        user = User.query.filter_by(username=username).first()
+        if user:
+            flash('Username already exists.', 'warning')
+            return redirect(url_for('register'))
+            
+        new_user = User(username=username, password=generate_password_hash(password, method='pbkdf2:sha256'))
+        db.session.add(new_user)
+        db.session.commit()
+        
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
 
 # -----------------------
 # Main

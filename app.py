@@ -398,7 +398,7 @@ def update_invoice_status(invoice_id):
 
     db.session.commit()
     flash(f'Invoice {invoice.invoice_number} has been updated.', 'success')
-    return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+    return redirect(url_for('invoices'))
 
 @app.route('/dashboard')
 @login_required

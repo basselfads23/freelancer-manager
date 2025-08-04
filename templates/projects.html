@@ -4,12 +4,13 @@
 <form method="POST" class="mb-4 p-3 border rounded bg-white">
   <div class="row g-3 align-items-end">
     <div class="col-md-3">
-      <label for="client_id" class="form-label">Client</label>
-      <select name="client_id" id="client_id" class="form-select" required>
+      <select name="client_id" id="client_select" class="form-select" required>
         <option value="" disabled selected>Select a client...</option>
         {% for client in clients %}
-        <option value="{{ client.id }}">{{ client.name }}</option>
+        <option value="{{ client.id }}" {% if client.id == new_client_id %}selected{% endif %}>{{ client.name }}</option>
         {% endfor %}
+        <option value="add_new_client" style="font-weight: bold; border-top: 1px solid #ccc; padding-top: 5px;">+ Add New Client</option>
+
       </select>
     </div>
     <div class="col-md-3">
@@ -113,4 +114,15 @@
   </ul>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('client_select').addEventListener('change', function() {
+    if (this.value === 'add_new_client') {
+      // If the user selects "Add New Client", redirect them.
+      window.location.href = "{{ url_for('clients', next='projects') }}";
+    }
+  });
+</script>
 {% endblock %}

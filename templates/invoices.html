@@ -2,6 +2,32 @@
 content %}
 <h2 class="mb-4">All Invoices</h2>
 
+<div class="card bg-light mb-4">
+  <div class="card-body">
+    <h5 class="card-title">Create New Invoice</h5>
+    <form
+      action="{{ url_for('create_invoice') }}"
+      method="POST"
+      class="row g-3 align-items-end"
+    >
+      <div class="col-auto">
+        <label for="project_id" class="form-label">Select Project</label>
+        <select class="form-select" name="project_id" id="project_id" required>
+          <option value="" disabled selected>Choose a project...</option>
+          {% for project in projects %}
+          <option value="{{ project.id }}">
+            {{ project.title }} (Client: {{ project.client.name }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Create Invoice</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-body">
     <table class="table table-hover">

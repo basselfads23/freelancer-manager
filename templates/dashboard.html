@@ -1,0 +1,62 @@
+{% extends "base.html" %} {% block title %}Dashboard{% endblock %} {% block
+content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row">
+  <div class="col-md-4">
+    <div class="card text-white bg-success mb-3">
+      <div class="card-header">Total Revenue (Paid)</div>
+      <div class="card-body">
+        <h4 class="card-title">${{ "%.2f"|format(total_revenue) }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-dark bg-warning mb-3">
+      <div class="card-header">Outstanding Revenue (Sent)</div>
+      <div class="card-body">
+        <h4 class="card-title">${{ "%.2f"|format(outstanding_revenue) }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-dark bg-light mb-3">
+      <div class="card-header">Total Invoiced</div>
+      <div class="card-body">
+        <h4 class="card-title">${{ "%.2f"|format(total_invoiced) }}</h4>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-header">
+    <h4>Revenue by Client (Paid Invoices)</h4>
+  </div>
+  <div class="card-body">
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Client Name</th>
+          <th class="text-end">Total Revenue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for client_name, total in revenue_by_client %}
+        <tr>
+          <td>{{ client_name }}</td>
+          <td class="text-end">${{ "%.2f"|format(total) }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="2" class="text-center fst-italic">
+            No paid invoices yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

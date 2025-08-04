@@ -2,6 +2,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 from flask_migrate import Migrate
 from datetime import datetime, date
 
@@ -111,21 +112,18 @@ class LineItem(db.Model):
 @app.route('/')
 @login_required
 def index():
-    return redirect(url_for('projects'))
+    return redirect(url_for('dashboard'))
 
 
 @app.route('/projects', methods=['GET', 'POST'])
 @login_required
 def projects():
     if request.method == 'POST':
+        # This part for creating a project remains the same
         title = request.form.get('title')
-
         description = request.form.get('description')
-        
         deadline_str = request.form.get('deadline')
-        
-        client_id = request.form.get('client_id')  
-        
+        client_id = request.form.get('client_id')
         deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date() if deadline_str else None
 
         new_project = Project(
@@ -133,18 +131,22 @@ def projects():
             description=description,
             deadline=deadline,
             client_id=client_id,
-            user_id=current_user.id 
+            user_id=current_user.id
         )
-        
         db.session.add(new_project)
         db.session.commit()
         return redirect(url_for('projects'))
 
-    all_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.deadline.asc()).all()
+    # START MODIFICATION for handling the redirect
+    # Get the new client ID from the URL arguments, if it exists
+    new_client_id = request.args.get('new_client_id', type=int)
 
+    all_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.deadline.asc()).all()
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
 
-    return render_template('projects.html', projects=all_projects, clients=all_clients)
+    # Pass the new client ID to the template
+    return render_template('projects.html', projects=all_projects, clients=all_clients, new_client_id=new_client_id)
+    # END MODIFICATION
 
 @app.route('/project/<int:project_id>')
 @login_required
@@ -195,17 +197,30 @@ def toggle_task(task_id):
 @app.route('/clients', methods=['GET', 'POST'])
 @login_required
 def clients():
+    # Check for the 'next' argument in the URL for the GET request
+    next_url = request.args.get('next')
+
     if request.method == 'POST':
         name = request.form.get('name')
         email = request.form.get('email')
-        
+
+        # Check for the 'next' argument submitted with the form
+        post_next_url = request.form.get('next')
+
         new_client = Client(name=name, email=email, user_id=current_user.id)
         db.session.add(new_client)
         db.session.commit()
+
+        # If the form came from the projects page, redirect back there
+        if post_next_url == 'projects':
+            return redirect(url_for('projects', new_client_id=new_client.id))
+
+        # Otherwise, do the default redirect
         return redirect(url_for('clients'))
 
+    # For the GET request, pass the 'next_url' to the template
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
-    return render_template('clients.html', clients=all_clients)
+    return render_template('clients.html', clients=all_clients, next_url=next_url)
 
 @app.route('/delete_client/<int:client_id>', methods=['POST'])
 @login_required
@@ -229,7 +244,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('projects'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid credentials. Please try again.', 'danger')
     return render_template('login.html')
@@ -264,13 +279,21 @@ def logout():
 @login_required
 def invoices():
     all_invoices = Invoice.query.filter_by(user_id=current_user.id).order_by(Invoice.issue_date.desc()).all()
-    return render_template('invoices.html', invoices=all_invoices)
+    all_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.title).all()
 
-@app.route('/project/<int:project_id>/create-invoice', methods=['POST'])
+    return render_template('invoices.html', invoices=all_invoices, projects=all_projects)
+
+@app.route('/create-invoice', methods=['POST'])
 @login_required
-def create_invoice(project_id):
+def create_invoice():
+    # Get project_id from the form submission
+    project_id = request.form.get('project_id')
+    if not project_id:
+        flash('You must select a project.', 'danger')
+        return redirect(url_for('invoices'))
+
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
-    
+
     # Generate a unique invoice number
     last_invoice = Invoice.query.order_by(Invoice.id.desc()).first()
     invoice_count = last_invoice.id if last_invoice else 0
@@ -283,7 +306,7 @@ def create_invoice(project_id):
     )
     db.session.add(new_invoice)
     db.session.commit()
-    
+
     flash(f'Invoice {invoice_number} created for project {project.title}.', 'success')
     return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
 
@@ -333,6 +356,43 @@ def update_invoice_status(invoice_id):
     db.session.commit()
     flash(f'Invoice {invoice.invoice_number} has been updated.', 'success')
     return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    # 1. Calculate Total Revenue (sum of all 'Paid' invoices)
+    total_revenue = db.session.query(func.sum(LineItem.unit_price * LineItem.quantity)).join(Invoice).filter(
+        Invoice.user_id == current_user.id,
+        Invoice.status == 'Paid'
+    ).scalar() or 0.0
+
+    # 2. Calculate Outstanding Revenue (sum of all 'Sent' invoices)
+    outstanding_revenue = db.session.query(func.sum(LineItem.unit_price * LineItem.quantity)).join(Invoice).filter(
+        Invoice.user_id == current_user.id,
+        Invoice.status == 'Sent'
+    ).scalar() or 0.0
+    
+    # 3. Calculate Total Invoiced (sum of all invoices, regardless of status)
+    total_invoiced = db.session.query(func.sum(LineItem.unit_price * LineItem.quantity)).join(Invoice).filter(
+        Invoice.user_id == current_user.id
+    ).scalar() or 0.0
+
+    # 4. Calculate Revenue per Client
+    revenue_by_client = db.session.query(
+        Client.name,
+        func.sum(LineItem.unit_price * LineItem.quantity)
+    ).join(Project).join(Invoice).join(LineItem).filter(
+        Invoice.user_id == current_user.id,
+        Invoice.status == 'Paid'
+    ).group_by(Client.name).order_by(Client.name).all()
+
+    return render_template(
+        'dashboard.html',
+        total_revenue=total_revenue,
+        outstanding_revenue=outstanding_revenue,
+        total_invoiced=total_invoiced,
+        revenue_by_client=revenue_by_client
+    )
 
 # -----------------------
 # Main

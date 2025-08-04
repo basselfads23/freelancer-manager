@@ -37,6 +37,13 @@
       </div>
     </form>
 
+    <form
+      action="{{ url_for('create_invoice', project_id=project.id) }}"
+      method="POST"
+    >
+      <button type="submit" class="btn btn-success">Create Invoice</button>
+    </form>
+
     <ul class="list-group">
       {% for task in project.tasks %}
       <li class="list-group-item d-flex align-items-center">

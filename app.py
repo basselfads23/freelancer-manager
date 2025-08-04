@@ -31,11 +31,10 @@ def load_user(user_id):
 migrate = Migrate(app, db)
 
 # -----------------------
-# Database Models (v3)
+# Database Models (v4)
 # -----------------------
 
 class Client(db.Model):
-
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), nullable=True)
@@ -44,7 +43,6 @@ class Client(db.Model):
 
 
 class Project(db.Model):
-    # ... (add the new 'tasks' relationship and helper properties)
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -52,9 +50,8 @@ class Project(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-    
-    # NEW: Relationship to the Task model
     tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
+    invoices = db.relationship('Invoice', backref='project', lazy=True, cascade="all, delete-orphan")
 
     @property
     def days_left(self):
@@ -63,18 +60,15 @@ class Project(db.Model):
             delta = self.deadline - today
             return delta.days
         return None
-        
-    # NEW: Helper property to count completed tasks
+
     @property
     def completed_tasks(self):
         return Task.query.filter_by(project_id=self.id, is_completed=True).count()
 
-    # NEW: Helper property to count all tasks
     @property
     def total_tasks(self):
         return Task.query.filter_by(project_id=self.id).count()
 
-# NEW: Task Model
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
@@ -82,9 +76,38 @@ class Task(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+class Invoice(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
+    issue_date = db.Column(db.Date, nullable=False, default=date.today)
+    due_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='Draft')  # e.g., Draft, Sent, Paid
+    
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    line_items = db.relationship('LineItem', backref='invoice', lazy=True, cascade="all, delete-orphan")
+
+    @property
+    def total_amount(self):
+        return sum(item.amount for item in self.line_items)
+
+class LineItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=1)
+    unit_price = db.Column(db.Float, nullable=False)
+    
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+
+    @property
+    def amount(self):
+        return self.quantity * self.unit_price
+
 # -----------------------
 # Routes
 # -----------------------
+
 @app.route('/')
 @login_required
 def index():
@@ -236,6 +259,80 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+@app.route('/invoices')
+@login_required
+def invoices():
+    all_invoices = Invoice.query.filter_by(user_id=current_user.id).order_by(Invoice.issue_date.desc()).all()
+    return render_template('invoices.html', invoices=all_invoices)
+
+@app.route('/project/<int:project_id>/create-invoice', methods=['POST'])
+@login_required
+def create_invoice(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    
+    # Generate a unique invoice number
+    last_invoice = Invoice.query.order_by(Invoice.id.desc()).first()
+    invoice_count = last_invoice.id if last_invoice else 0
+    invoice_number = f'INV-{invoice_count + 1:04d}'
+
+    new_invoice = Invoice(
+        invoice_number=invoice_number,
+        project_id=project.id,
+        user_id=current_user.id
+    )
+    db.session.add(new_invoice)
+    db.session.commit()
+    
+    flash(f'Invoice {invoice_number} created for project {project.title}.', 'success')
+    return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
+
+@app.route('/invoice/<int:invoice_id>')
+@login_required
+def invoice_detail(invoice_id):
+    invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
+    return render_template('invoice_detail.html', invoice=invoice)
+
+@app.route('/invoice/<int:invoice_id>/add-item', methods=['POST'])
+@login_required
+def add_line_item(invoice_id):
+    invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
+    
+    description = request.form.get('description')
+    quantity = float(request.form.get('quantity', 1))
+    unit_price = float(request.form.get('unit_price'))
+
+    if description and unit_price is not None:
+        new_item = LineItem(
+            description=description,
+            quantity=quantity,
+            unit_price=unit_price,
+            invoice_id=invoice.id
+        )
+        db.session.add(new_item)
+        db.session.commit()
+        flash('Line item added.', 'success')
+    else:
+        flash('Description and Unit Price are required.', 'danger')
+        
+    return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+
+@app.route('/invoice/update-status/<int:invoice_id>', methods=['POST'])
+@login_required
+def update_invoice_status(invoice_id):
+    invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
+    new_status = request.form.get('status')
+    due_date_str = request.form.get('due_date')
+
+    if new_status:
+        invoice.status = new_status
+    
+    if due_date_str:
+        invoice.due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+
+    db.session.commit()
+    flash(f'Invoice {invoice.invoice_number} has been updated.', 'success')
+    return redirect(url_for('invoice_detail', invoice_id=invoice.id))
 
 # -----------------------
 # Main

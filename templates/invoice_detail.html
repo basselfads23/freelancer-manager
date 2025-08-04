@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Invoice {{ invoice.invoice_number }}</h2>
+    <a href="{{ url_for('invoices') }}" class="btn btn-secondary">Back to All Invoices</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Invoice Details</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Project:</strong> {{ invoice.project.title }}</p>
+                <p><strong>Client:</strong> {{ invoice.project.client.name }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Status:</strong> <span class="badge bg-success">{{ invoice.status }}</span></p>
+                <p><strong>Date Issued:</strong> {{ invoice.issue_date.strftime('%Y-%m-%d') }}</p>
+                <p><strong>Date Due:</strong> {{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else 'Not set' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h4>Line Items</h4>
+    </div>
+    <div class="card-body">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th class="text-center">Quantity</th>
+                    <th class="text-end">Unit Price</th>
+                    <th class="text-end">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in invoice.line_items %}
+                <tr>
+                    <td>{{ item.description }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-end">${{ "%.2f"|format(item.unit_price) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(item.amount) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center fst-italic">No line items yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="fw-bold">
+                    <td colspan="3" class="text-end">Total:</td>
+                    <td class="text-end">${{ "%.2f"|format(invoice.total_amount) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Add New Item</div>
+            <div class="card-body">
+                <form action="{{ url_for('add_line_item', invoice_id=invoice.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label for="quantity" class="form-label">Quantity</label>
+                            <input type="number" class="form-control" name="quantity" value="1" step="0.01" required>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label for="unit_price" class="form-label">Unit Price ($)</label>
+                            <input type="number" class="form-control" name="unit_price" step="0.01" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Item</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Update Invoice</div>
+            <div class="card-body">
+                <form action="{{ url_for('update_invoice_status', invoice_id=invoice.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="due_date" class="form-label">Due Date</label>
+                        <input type="date" class="form-control" name="due_date" value="{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date }}">
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            <option value="Draft" {% if invoice.status == 'Draft' %}selected{% endif %}>Draft</option>
+                            <option value="Sent" {% if invoice.status == 'Sent' %}selected{% endif %}>Sent</option>
+                            <option value="Paid" {% if invoice.status == 'Paid' %}selected{% endif %}>Paid</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success">Update Invoice</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

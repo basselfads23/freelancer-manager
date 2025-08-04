@@ -50,6 +50,8 @@ class Project(db.Model):
     deadline = db.Column(db.Date, nullable=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+
 
     tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
     invoices = db.relationship('Invoice', backref='project', lazy=True, cascade="all, delete-orphan")
@@ -393,6 +395,19 @@ def dashboard():
         total_invoiced=total_invoiced,
         revenue_by_client=revenue_by_client
     )
+
+@app.route('/project/<int:project_id>/save-notes', methods=['POST'])
+@login_required
+def save_notes(project_id):
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    
+    notes_content = request.form.get('notes')
+    project.notes = notes_content
+    
+    db.session.commit()
+    
+    flash('Project notes have been saved.', 'success')
+    return redirect(url_for('project_detail', project_id=project.id))
 
 # -----------------------
 # Main

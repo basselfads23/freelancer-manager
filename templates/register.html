@@ -2,10 +2,11 @@
 content %}
 <div class="row justify-content-center">
   <div class="col-md-6">
-    <h2 class="mt-5 mb-4 text-center">Register</h2>
+    <h2 class="mt-5 mb-4 text-center">Create Your Account</h2>
     <div class="card">
       <div class="card-body">
         <form method="POST" action="{{ url_for('register') }}">
+          <!-- Username Field -->
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
             <input
@@ -16,6 +17,20 @@ content %}
               required
             />
           </div>
+
+          <!-- Email Field -->
+          <div class="mb-3">
+            <label for="email" class="form-label">Email Address</label>
+            <input
+              type="email"
+              class="form-control"
+              id="email"
+              name="email"
+              required
+            />
+          </div>
+
+          <!-- Password Field -->
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
             <input
@@ -26,8 +41,42 @@ content %}
               required
             />
           </div>
+
+          <!-- Confirm Password Field -->
+          <div class="mb-3">
+            <label for="confirm_password" class="form-label"
+              >Confirm Password</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="confirm_password"
+              name="confirm_password"
+              required
+            />
+          </div>
+
           <button type="submit" class="btn btn-success w-100">Register</button>
         </form>
+        <!-- SECTION FOR GOOGLE OAUTH -->
+        <hr />
+        <div class="text-center">
+          <p class="text-muted">Or</p>
+          <a
+            href="{{ url_for('google_login') }}"
+            class="btn btn-outline-dark w-100"
+          >
+            <img
+              src="https://developers.google.com/identity/images/g-logo.png"
+              width="20"
+              height="20"
+              style="margin-right: 10px"
+              alt="Google logo"
+            />
+            Sign up with Google
+          </a>
+        </div>
+        <!-- END SECTION -->
       </div>
     </div>
     <div class="text-center mt-3">

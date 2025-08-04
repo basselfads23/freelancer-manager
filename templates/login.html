@@ -28,6 +28,25 @@
           </div>
           <button type="submit" class="btn btn-primary w-100">Login</button>
         </form>
+        <!-- SECTION FOR GOOGLE OAUTH -->
+        <hr />
+        <div class="text-center">
+          <p class="text-muted">Or</p>
+          <a
+            href="{{ url_for('google_login') }}"
+            class="btn btn-outline-dark w-100"
+          >
+            <img
+              src="https://developers.google.com/identity/images/g-logo.png"
+              width="20"
+              height="20"
+              style="margin-right: 10px"
+              alt="Google logo"
+            />
+            Sign in with Google
+          </a>
+        </div>
+        <!-- END SECTION -->
       </div>
     </div>
   </div>

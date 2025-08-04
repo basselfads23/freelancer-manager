@@ -1,6 +1,10 @@
+import os
+import secrets
+from authlib.integrations.flask_client import OAuth
+from dotenv import load_dotenv
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from flask_migrate import Migrate
@@ -8,11 +12,28 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 
+load_dotenv()
+
 # Configure SQLite database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///freelancer_manager.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = r"znxyD\E_%'izc_;J**]Iow\"L£lM^f1x8vtA]:,pd)F5^}g1V=R"
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+
+app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
+app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
+
 db = SQLAlchemy(app)
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=app.config['GOOGLE_CLIENT_ID'],
+    client_secret=app.config['GOOGLE_CLIENT_SECRET'],
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
+
 
 # --- Authentication Setup ---
 login_manager = LoginManager()
@@ -22,6 +43,7 @@ login_manager.login_view = 'login' # Redirect to login page if user is not authe
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(150), nullable=False)
 
 @login_manager.user_loader
@@ -255,20 +277,39 @@ def login():
 def register():
     if request.method == 'POST':
         username = request.form.get('username')
+        email = request.form.get('email')
         password = request.form.get('password')
-        
-        # Check if username already exists
-        user = User.query.filter_by(username=username).first()
-        if user:
-            flash('Username already exists.', 'warning')
+        confirm_password = request.form.get('confirm_password')
+
+        # --- Start Validation ---
+        # Check if username or email already exists
+        user_by_username = User.query.filter_by(username=username).first()
+        if user_by_username:
+            flash('Username already exists. Please choose another.', 'warning')
             return redirect(url_for('register'))
+
+        user_by_email = User.query.filter_by(email=email).first()
+        if user_by_email:
+            flash('Email address is already registered. Please log in.', 'warning')
+            return redirect(url_for('login'))
+
+        # Check if passwords match
+        if password != confirm_password:
+            flash('Passwords do not match. Please try again.', 'danger')
+            return redirect(url_for('register'))
+        # --- End Validation ---
             
-        new_user = User(username=username, password=generate_password_hash(password, method='pbkdf2:sha256'))
+        new_user = User(
+            username=username, 
+            email=email, 
+            password=generate_password_hash(password, method='pbkdf2:sha256')
+        )
         db.session.add(new_user)
         db.session.commit()
         
         flash('Registration successful! Please log in.', 'success')
         return redirect(url_for('login'))
+        
     return render_template('register.html')
 
 @app.route('/logout')
@@ -408,6 +449,47 @@ def save_notes(project_id):
     
     flash('Project notes have been saved.', 'success')
     return redirect(url_for('project_detail', project_id=project.id))
+
+@app.route('/login/google')
+def google_login():
+
+    # Generate a nonce for OIDC to prevent replay attacks
+    nonce = secrets.token_urlsafe(16)
+    session['oauth_nonce'] = nonce
+
+    redirect_uri = url_for('google_callback', _external=True)
+    return google.authorize_redirect(redirect_uri, nonce=nonce)
+
+@app.route('/login/google/callback')
+def google_callback():
+    token = google.authorize_access_token()
+
+    # Retrieve and remove nonce from session
+    nonce = session.pop('oauth_nonce', None)
+
+    # Parse the ID token securely using the nonce
+    user_info = google.parse_id_token(token, nonce=nonce)
+
+    if not user_info:
+        flash('Google login failed: unable to fetch user info.', 'danger')
+        return redirect(url_for('login'))
+
+    # Check if the user already exists in our database
+    user = User.query.filter_by(email=user_info['email']).first()
+
+    if not user:
+        new_user = User(
+            username=user_info['name'].replace(" ", "").lower(),
+            email=user_info['email'],
+            password=generate_password_hash(os.urandom(16).hex(), method='pbkdf2:sha256')
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        user = new_user
+
+    login_user(user)
+    flash('You have been successfully logged in with Google.', 'success')
+    return redirect(url_for('dashboard'))
 
 # -----------------------
 # Main

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Invoice {{ invoice.invoice_number }}</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap");
+
+      body {
+        font-family: "Roboto", sans-serif;
+        font-size: 12px;
+        color: #333;
+        margin: 0;
+        padding: 0;
+      }
+      .invoice-box {
+        max-width: 800px;
+        margin: auto;
+        padding: 30px;
+        border: 1px solid #eee;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+        font-size: 16px;
+        line-height: 24px;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 40px;
+      }
+      .header h1 {
+        font-size: 45px;
+        font-weight: bold;
+        color: #333;
+        margin: 0;
+      }
+      .invoice-details {
+        text-align: right;
+      }
+      .invoice-details p {
+        margin: 0;
+        line-height: 1.6;
+      }
+      .client-info {
+        margin-bottom: 40px;
+      }
+      .client-info p {
+        margin: 0;
+      }
+      .line-items-table {
+        width: 100%;
+        line-height: inherit;
+        text-align: left;
+        border-collapse: collapse;
+      }
+      .line-items-table th {
+        background: #eee;
+        border-bottom: 2px solid #ddd;
+        font-weight: bold;
+        padding: 8px;
+      }
+      .line-items-table td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+      }
+      .line-items-table .total-row td {
+        border-top: 2px solid #ddd;
+        font-weight: bold;
+      }
+      .text-right {
+        text-align: right;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 40px;
+        font-size: 12px;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="invoice-box">
+      <div class="header">
+        <div>
+          <h1>INVOICE</h1>
+        </div>
+        <div class="invoice-details">
+          <p><strong>Invoice #:</strong> {{ invoice.invoice_number }}</p>
+          <p>
+            <strong>Date Issued:</strong> {{ invoice.issue_date.strftime('%B %d,
+            %Y') }}
+          </p>
+          <p>
+            <strong>Date Due:</strong> {{ invoice.due_date.strftime('%B %d, %Y')
+            if invoice.due_date else 'N/A' }}
+          </p>
+        </div>
+      </div>
+
+      <div class="client-info">
+        <p><strong>Bill To:</strong></p>
+        <p>{{ invoice.project.client.name }}</p>
+        <p>{{ invoice.project.client.email }}</p>
+      </div>
+
+      <table class="line-items-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="text-right">Quantity</th>
+            <th class="text-right">Unit Price</th>
+            <th class="text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in invoice.line_items %}
+          <tr>
+            <td>{{ item.description }}</td>
+            <td class="text-right">{{ item.quantity }}</td>
+            <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
+            <td class="text-right">${{ "%.2f"|format(item.amount) }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="total-row">
+            <td colspan="3" class="text-right"><strong>Total</strong></td>
+            <td class="text-right">
+              <strong>${{ "%.2f"|format(invoice.total_amount) }}</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="footer">
+        <p>Thank you for your business!</p>
+      </div>
+    </div>
+  </body>
+</html>

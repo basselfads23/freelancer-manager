@@ -4,11 +4,12 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 from flask_migrate import Migrate
 from datetime import datetime, date
+from weasyprint import HTML
 
 app = Flask(__name__)
 
@@ -490,6 +491,25 @@ def google_callback():
     login_user(user)
     flash('You have been successfully logged in with Google.', 'success')
     return redirect(url_for('dashboard'))
+
+@app.route('/invoice/<int:invoice_id>/download-pdf')
+@login_required
+def download_pdf(invoice_id):
+    # 1. Fetch the correct invoice from the database
+    invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
+
+    # 2. Render our dedicated PDF template with the invoice data
+    rendered_html = render_template('invoice_pdf.html', invoice=invoice)
+
+    # 3. Use WeasyPrint to generate a PDF from the rendered HTML
+    pdf = HTML(string=rendered_html).write_pdf()
+
+    # 4. Create a Flask response to send the PDF to the user
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=Invoice-{invoice.invoice_number}.pdf'
+
+    return response
 
 # -----------------------
 # Main

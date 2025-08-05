@@ -1,38 +1,49 @@
-# Freelancer Manager - v5.0
+# Freelancer Manager - v6.0
 
-Freelancer Manager is a web application designed to help freelance professionals organize their work, track projects, manage clients, and handle invoicing. This tool provides a centralized dashboard to keep all essential business information in one place.
+Freelancer Manager is a powerful, all-in-one business management tool designed for the modern freelancer. It streamlines the entire workflow from project inception to final payment, providing a centralized platform to track work, manage finances, and maintain professional client relationships.
 
-## Core Features (as of v4.0)
+## New in Version 6.0: The Billing & Profitability Overhaul
 
-- **Secure User Authentication**: Each user has a private account. All data is linked to the logged-in user, ensuring privacy and security.
-- **Client Management**: Add, view, and delete clients to keep your contact list organized.
-- **Project & Task Tracking**:
-  - Create projects with titles, descriptions, and deadlines.
-  - Assign each project to a specific client.
-  - Add individual tasks to each project and mark them as complete.
-  - A progress bar on the projects page visualizes task completion.
-- **Financial Dashboard**: A dedicated dashboard provides key financial analytics at a glance, including total revenue, outstanding revenue, and a breakdown of revenue per client.
-- **Invoicing System**:
-  - Create detailed invoices for any project.
-  - Add multiple line items with descriptions, quantities, and prices.
-  - Update invoice status (Draft, Sent, Paid) and set due dates.
-- **Project Notes**: Add and save private, freeform notes to any project for keeping track of ideas, client feedback, or other miscellaneous details.
+This version transforms the application into a complete financial toolkit by introducing advanced billing methods, integrated time and expense tracking, and custom branding.
+
+- **Advanced Project Billing**:
+
+  - **Flexible Billing Types**: Set a billing method for each project: **Hourly Rate**, **Flat Fee**, or **Per Task**. The application's UI intelligently adapts to your choice.
+  - **Integrated Time Tracking**: For hourly projects, track your work with a **real-time Start/Stop timer** on each task or log time manually for offline work.
+
+- **"Smart" Invoice Generation**:
+
+  - **Automated Invoicing**: With the new **"Generate Invoice from Tasks"** button, you can create a complete, detailed invoice in a single click. The system automatically pulls all completed, unbilled tasks and their logged time or fixed fees, eliminating repetitive data entry.
+
+- **Expense Tracking & Profitability Reporting**:
+
+  - **Log Expenses**: A new section allows you to record and categorize business expenses associated with your projects.
+  - **Calculate Net Profit**: The main dashboard is now upgraded to display your **net profit** (Total Revenue - Total Expenses), giving you a true, at-a-glance understanding of your financial health.
+
+- **Custom Invoice Branding**:
+  - **Upload Your Logo**: A new settings page allows you to upload your business logo.
+  - **Professional PDFs**: Your logo will automatically appear on all downloaded PDF invoices, ensuring a professional and branded look for your clients.
 
 ---
 
-## **New in Version 5.0**
+## Core Features
 
-This version focuses on enhancing the authentication system, streamlining key user workflows, and adding professional export features.
+- **Secure & Flexible Authentication**:
 
-- **Enhanced Authentication System**:
+  - Create a private account with a username, email, and password.
+  - Sign up or log in instantly using your **Google account**.
 
-  - **Upgraded Registration**: The standard registration form will be updated to include fields for `username`, `email`, `password`, and a `confirm password` field for a more robust sign-up process.
-  - **Google OAuth**: Users will be able to sign up and log in with a single click using their Google account.
+- **Client & Project Management**:
 
-- **Streamlined UI & Workflow**:
+  - Maintain an organized list of all your clients.
+  - Track projects with deadlines, descriptions, and task checklists.
+  - Visualize task completion with a progress bar.
 
-  - **Improved User Navigation**: A "Register here" link will be added to the login page.
-  - **Better Invoice Management**: The invoice creation workflow will be improved with more intuitive controls and a "Save and Exit" action that returns the user to the main invoice list.
+- **Financial Dashboard & Invoicing**:
 
-- **PDF Invoice Exports**:
-  - A "Download as PDF" button will be added to the invoice detail page, allowing users to easily save and send professional copies of their invoices.
+  - Get a high-level overview of total revenue, outstanding payments, and revenue per client.
+  - Create detailed invoices with multiple line items.
+  - Download any invoice as a clean, professional **PDF document**.
+
+- **Detailed Record-Keeping**:
+  - Keep private, freeform notes for each project to track ideas and client feedback.

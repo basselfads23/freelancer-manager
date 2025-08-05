@@ -5,8 +5,8 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Invoice {{ invoice.invoice_number }}</h2>
-    <a href="{{ url_for('invoices') }}" class="btn btn-secondary">Back to All Invoices</a>
-    <a href="{{ url_for('download_pdf', invoice_id=invoice.id) }}" class="btn btn-info">Download as PDF</a>
+    <a href="{{ url_for('main.invoices') }}" class="btn btn-secondary">Back to All Invoices</a>
+    <a href="{{ url_for('main.download_pdf', invoice_id=invoice.id) }}" class="btn btn-info">Download as PDF</a>
 </div>
 
 <div class="card mb-4">
@@ -80,7 +80,7 @@
         <div class="card">
             <div class="card-header">Add New Item</div>
             <div class="card-body">
-                <form action="{{ url_for('add_line_item', invoice_id=invoice.id) }}" method="POST">
+                <form action="{{ url_for('main.add_line_item', invoice_id=invoice.id) }}" method="POST">
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <input type="text" class="form-control" name="description" required>
@@ -105,7 +105,7 @@
         <div class="card">
             <div class="card-header">Update Invoice</div>
             <div class="card-body">
-                <form action="{{ url_for('update_invoice_status', invoice_id=invoice.id) }}" method="POST">
+                <form action="{{ url_for('main.update_invoice_status', invoice_id=invoice.id) }}" method="POST">
                     <div class="mb-3">
                         <label for="due_date" class="form-label">Due Date</label>
                         <input type="date" class="form-control" name="due_date" value="{{ invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date }}">

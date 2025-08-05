@@ -12,7 +12,7 @@
   <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
       <div class="container">
-        <a class="navbar-brand" href="{{ url_for('dashboard') }}"
+        <a class="navbar-brand" href="{{ url_for('main.dashboard') }}"
           >Freelancer Manager</a
         >
         <button
@@ -30,18 +30,24 @@
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             {% if current_user.is_authenticated %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('dashboard') }}"
+              <a class="nav-link" href="{{ url_for('main.dashboard') }}"
                 >Dashboard</a
               >
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('projects') }}">Projects</a>
+              <a class="nav-link" href="{{ url_for('main.projects') }}"
+                >Projects</a
+              >
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('clients') }}">Clients</a>
+              <a class="nav-link" href="{{ url_for('main.clients') }}"
+                >Clients</a
+              >
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('invoices') }}">Invoices</a>
+              <a class="nav-link" href="{{ url_for('main.invoices') }}"
+                >Invoices</a
+              >
             </li>
             {% endif %}
           </ul>
@@ -53,14 +59,16 @@
               >
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+              <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
             </li>
             {% else %}
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+              <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
             </li>
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+              <a class="nav-link" href="{{ url_for('main.register') }}"
+                >Register</a
+              >
             </li>
             {% endif %}
           </ul>

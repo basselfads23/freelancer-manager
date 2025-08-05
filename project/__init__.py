@@ -14,7 +14,7 @@ from .routes import main
 load_dotenv()
 
 def create_app():
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(__name__, instance_relative_config=True, template_folder='../templates')
 
     # --- Load Configuration ---
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///freelancer_manager.db'

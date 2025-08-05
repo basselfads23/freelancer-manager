@@ -5,7 +5,7 @@ content %}
     <h2 class="mt-5 mb-4 text-center">Create Your Account</h2>
     <div class="card">
       <div class="card-body">
-        <form method="POST" action="{{ url_for('register') }}">
+        <form method="POST" action="{{ url_for('main.register') }}">
           <!-- Username Field -->
           <div class="mb-3">
             <label for="username" class="form-label">Username</label>
@@ -63,7 +63,7 @@ content %}
         <div class="text-center">
           <p class="text-muted">Or</p>
           <a
-            href="{{ url_for('google_login') }}"
+            href="{{ url_for('main.google_login') }}"
             class="btn btn-outline-dark w-100"
           >
             <img
@@ -81,7 +81,8 @@ content %}
     </div>
     <div class="text-center mt-3">
       <p>
-        Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+        Already have an account?
+        <a href="{{ url_for('main.login') }}">Login here</a>
       </p>
     </div>
   </div>

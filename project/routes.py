@@ -23,7 +23,7 @@ main = Blueprint('main', __name__)
 @main.route('/')
 @login_required
 def index():
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('main.dashboard'))
 
 @main.route('/projects', methods=['GET', 'POST'])
 @login_required
@@ -60,7 +60,7 @@ def projects():
         db.session.add(new_project)
         db.session.commit()
         flash(f'Project "{title}" created successfully.', 'success')
-        return redirect(url_for('project_detail', project_id=new_project.id))
+        return redirect(url_for('main.project_detail', project_id=new_project.id))
 
     # This part handles the GET request (loading the page)
     new_client_id = request.args.get('new_client_id', type=int)
@@ -83,7 +83,7 @@ def delete_project(project_id):
     project_to_delete = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     db.session.delete(project_to_delete)
     db.session.commit()
-    return redirect(url_for('projects'))
+    return redirect(url_for('main.projects'))
 
 @main.route('/project/<int:project_id>/update-details', methods=['POST'])
 @login_required
@@ -115,7 +115,7 @@ def add_task(project_id):
     
     if not task_description:
         flash('Task description cannot be empty.', 'warning')
-        return redirect(url_for('project_detail', project_id=project.id))
+        return redirect(url_for('main.project_detail', project_id=project.id))
 
     # Create the new task with its description
     new_task = Task(
@@ -145,7 +145,7 @@ def add_task(project_id):
     db.session.commit()
     flash('New task added!', 'success')
         
-    return redirect(url_for('project_detail', project_id=project.id))
+    return redirect(url_for('main.project_detail', project_id=project.id))
 
 @main.route('/toggle_task/<int:task_id>', methods=['POST'])
 @login_required
@@ -171,7 +171,7 @@ def delete_task(task_id):
     db.session.delete(task)
     db.session.commit()
     flash('Task has been deleted.', 'success')
-    return redirect(url_for('project_detail', project_id=project_id))
+    return redirect(url_for('main.project_detail', project_id=project_id))
 
 # --- to handle deleting a time entry ---
 @main.route('/time-entry/<int:entry_id>/delete', methods=['POST'])
@@ -183,13 +183,13 @@ def delete_time_entry(entry_id):
     # Security check: ensure the entry belongs to a task owned by the current user
     if entry.task.user_id != current_user.id:
         flash('You are not authorized to delete this entry.', 'danger')
-        return redirect(url_for('projects'))
+        return redirect(url_for('main.projects'))
 
     project_id = entry.task.project_id
     db.session.delete(entry)
     db.session.commit()
     flash('Time entry has been deleted.', 'success')
-    return redirect(url_for('project_detail', project_id=project_id))
+    return redirect(url_for('main.project_detail', project_id=project_id))
 
 # --- UNIFIED ROUTE for updating all task details ---
 @main.route('/task/<int:task_id>/update', methods=['POST'])
@@ -217,7 +217,7 @@ def update_task(task_id):
 
     db.session.commit()
     flash(f'Task "{task.description}" has been updated.', 'success')
-    return redirect(url_for('project_detail', project_id=task.project_id))
+    return redirect(url_for('main.project_detail', project_id=task.project_id))
 
 @main.route('/clients', methods=['GET', 'POST'])
 @login_required
@@ -238,10 +238,10 @@ def clients():
 
         # If the form came from the projects page, redirect back there
         if post_next_url == 'projects':
-            return redirect(url_for('projects', new_client_id=new_client.id))
+            return redirect(url_for('main.projects', new_client_id=new_client.id))
 
         # Otherwise, do the default redirect
-        return redirect(url_for('clients'))
+        return redirect(url_for('main.clients'))
 
     # For the GET request, pass the 'next_url' to the template
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
@@ -259,7 +259,7 @@ def delete_client(client_id):
         db.session.commit()
         flash(f'Client {client_to_delete.name} has been deleted.', 'success')
         
-    return redirect(url_for('clients'))
+    return redirect(url_for('main.clients'))
 
 @main.route('/login', methods=['GET', 'POST'])
 def login():
@@ -269,7 +269,7 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             login_user(user)
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('main.dashboard'))
         else:
             flash('Invalid credentials. Please try again.', 'danger')
     return render_template('login.html')
@@ -287,17 +287,17 @@ def register():
         user_by_username = User.query.filter_by(username=username).first()
         if user_by_username:
             flash('Username already exists. Please choose another.', 'warning')
-            return redirect(url_for('register'))
+            return redirect(url_for('main.register'))
 
         user_by_email = User.query.filter_by(email=email).first()
         if user_by_email:
             flash('Email address is already registered. Please log in.', 'warning')
-            return redirect(url_for('login'))
+            return redirect(url_for('main.login'))
 
         # Check if passwords match
         if password != confirm_password:
             flash('Passwords do not match. Please try again.', 'danger')
-            return redirect(url_for('register'))
+            return redirect(url_for('main.register'))
         # --- End Validation ---
             
         new_user = User(
@@ -309,7 +309,7 @@ def register():
         db.session.commit()
         
         flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
+        return redirect(url_for('main.login'))
         
     return render_template('register.html')
 
@@ -317,7 +317,7 @@ def register():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('login'))
+    return redirect(url_for('main.login'))
 
 @main.route('/invoices')
 @login_required
@@ -334,7 +334,7 @@ def create_invoice():
     project_id = request.form.get('project_id')
     if not project_id:
         flash('You must select a project.', 'danger')
-        return redirect(url_for('invoices'))
+        return redirect(url_for('main.invoices'))
 
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
 
@@ -352,7 +352,7 @@ def create_invoice():
     db.session.commit()
 
     flash(f'Invoice {invoice_number} created for project {project.title}.', 'success')
-    return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
+    return redirect(url_for('main.invoice_detail', invoice_id=new_invoice.id))
 
 @main.route('/invoice/<int:invoice_id>')
 @login_required
@@ -382,7 +382,7 @@ def add_line_item(invoice_id):
     else:
         flash('Description and Unit Price are required.', 'danger')
         
-    return redirect(url_for('invoice_detail', invoice_id=invoice.id))
+    return redirect(url_for('main.invoice_detail', invoice_id=invoice.id))
 
 @main.route('/invoice/update-status/<int:invoice_id>', methods=['POST'])
 @login_required
@@ -399,7 +399,7 @@ def update_invoice_status(invoice_id):
 
     db.session.commit()
     flash(f'Invoice {invoice.invoice_number} has been updated.', 'success')
-    return redirect(url_for('invoices'))
+    return redirect(url_for('main.invoices'))
 
 @main.route('/dashboard')
 @login_required
@@ -449,7 +449,7 @@ def save_notes(project_id):
     db.session.commit()
     
     flash('Project notes have been saved.', 'success')
-    return redirect(url_for('project_detail', project_id=project.id))
+    return redirect(url_for('main.project_detail', project_id=project.id))
 
 @main.route('/login/google')
 def google_login():
@@ -473,7 +473,7 @@ def google_callback():
 
     if not user_info:
         flash('Google login failed: unable to fetch user info.', 'danger')
-        return redirect(url_for('login'))
+        return redirect(url_for('main.login'))
 
     # Check if the user already exists in our database
     user = User.query.filter_by(email=user_info['email']).first()
@@ -490,7 +490,7 @@ def google_callback():
 
     login_user(user)
     flash('You have been successfully logged in with Google.', 'success')
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('main.dashboard'))
 
 @main.route('/invoice/<int:invoice_id>/download-pdf')
 @login_required
@@ -574,7 +574,7 @@ def update_task_billing(task_id):
     # Ensure the project is a Per Task project
     if task.project.billing_type != 'Per Task':
         flash('Task billing can only be updated for "Per Task" projects.', 'danger')
-        return redirect(url_for('project_detail', project_id=task.project_id))
+        return redirect(url_for('main.project_detail', project_id=task.project_id))
 
     task_fee = request.form.get('task_fee')
     quantity = request.form.get('quantity')
@@ -587,7 +587,7 @@ def update_task_billing(task_id):
 
     db.session.commit()
     flash(f'Billing details for task "{task.description}" have been updated.', 'success')
-    return redirect(url_for('project_detail', project_id=task.project_id))
+    return redirect(url_for('main.project_detail', project_id=task.project_id))
 
 # --- ROUTE FOR SMART INVOICE GENERATION ---
 @main.route('/project/<int:project_id>/generate-invoice', methods=['POST'])
@@ -612,7 +612,7 @@ def generate_invoice(project_id):
 
         if not tasks_to_bill:
             flash('No completed, unbilled tasks are available to invoice.', 'warning')
-            return redirect(url_for('project_detail', project_id=project.id))
+            return redirect(url_for('main.project_detail', project_id=project.id))
 
         # Step 2: Pre-process tasks to generate potential line items.
         line_items_to_create = []
@@ -654,7 +654,7 @@ def generate_invoice(project_id):
         # Step 3: Check if any valid line items were generated.
         if not line_items_to_create:
             flash('No tasks with billable hours or fees were found.', 'info')
-            return redirect(url_for('project_detail', project_id=project.id))
+            return redirect(url_for('main.project_detail', project_id=project.id))
 
         # Step 4: Atomically get the next invoice number.
         sequence = InvoiceSequence.query.first()
@@ -691,11 +691,11 @@ def generate_invoice(project_id):
         # Step 6: Commit the transaction.
         db.session.commit()
         flash(f'Successfully generated Invoice {new_invoice.invoice_number}!', 'success')
-        return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
+        return redirect(url_for('main.invoice_detail', invoice_id=new_invoice.id))
 
     except Exception as e:
         db.session.rollback()
         # Use Flask's logger for better production debugging.
         app.logger.error(f"Error generating invoice for project {project.id}: {e}", exc_info=True)
         flash('An unexpected error occurred while generating the invoice. Please try again.', 'danger')
-        return redirect(url_for('project_detail', project_id=project.id))
+        return redirect(url_for('main.project_detail', project_id=project.id))

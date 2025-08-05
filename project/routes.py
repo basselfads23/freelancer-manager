@@ -1,187 +1,31 @@
+# project/routes.py
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, make_response
+from flask_login import login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import func
+from datetime import datetime, date
 import os
 import secrets
-from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, flash, session, make_response
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
-from flask_migrate import Migrate
-from datetime import datetime, date
 from weasyprint import HTML
 
-app = Flask(__name__)
+# Import extensions and models
+from .extensions import db, oauth
+from .models import User, Client, Project, Task, TimeEntry, Invoice, LineItem, InvoiceSequence
 
-load_dotenv()
-
-# Configure SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///freelancer_manager.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-
-app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
-app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
-
-db = SQLAlchemy(app)
-oauth = OAuth(app)
-google = oauth.register(
-    name='google',
-    client_id=app.config['GOOGLE_CLIENT_ID'],
-    client_secret=app.config['GOOGLE_CLIENT_SECRET'],
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={
-        'scope': 'openid email profile'
-    }
-)
-
-
-# --- Authentication Setup ---
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login' # Redirect to login page if user is not authenticated
-
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(150), nullable=False)
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-# --- End of Authentication Setup ---
-
-migrate = Migrate(app, db)
-
-# -----------------------
-# Database Models (v4)
-# -----------------------
-
-class Client(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(100), nullable=True)
-    projects = db.relationship('Project', backref='client', lazy=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-
-class Project(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    deadline = db.Column(db.Date, nullable=True)
-    client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    billing_type = db.Column(db.String(50), nullable=False, default='Hourly') # Options: Hourly, Flat Fee, Per Task
-    hourly_rate = db.Column(db.Float, nullable=True)
-    flat_fee_amount = db.Column(db.Float, nullable=True)
-
-
-    tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
-    invoices = db.relationship('Invoice', backref='project', lazy=True, cascade="all, delete-orphan")
-
-    @property
-    def days_left(self):
-        if self.deadline:
-            today = date.today()
-            delta = self.deadline - today
-            return delta.days
-        return None
-
-    @property
-    def completed_tasks(self):
-        return Task.query.filter_by(project_id=self.id, is_completed=True).count()
-
-    @property
-    def total_tasks(self):
-        return Task.query.filter_by(project_id=self.id).count()
-
-class Task(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(200), nullable=False)
-    is_completed = db.Column(db.Boolean, default=False, nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-    # For Hourly Billing
-    override_rate = db.Column(db.Float, nullable=True)
-
-    # For Per-Task Billing
-    task_fee = db.Column(db.Float, nullable=True)
-    quantity = db.Column(db.Integer, nullable=True, default=1)
-
-    # For Invoice Generation
-    is_billable = db.Column(db.Boolean, default=True, nullable=False)
-    has_been_billed = db.Column(db.Boolean, default=False, nullable=False)
-
-    # Relationship to Time Entries
-    time_entries = db.relationship('TimeEntry', backref='task', lazy=True, cascade="all, delete-orphan")
-    line_item_id = db.Column(db.Integer, db.ForeignKey('line_item.id'), nullable=True)
-
-    quantity_is_na = db.Column(db.Boolean, default=False, nullable=False)
-
-    # NEW HELPER PROPERTY
-    @property
-    def total_hours_logged(self):
-        return sum(entry.hours_worked for entry in self.time_entries)
-    
-class TimeEntry(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    hours_worked = db.Column(db.Float, nullable=False)
-    entry_date = db.Column(db.Date, nullable=False, default=date.today)
-    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
-
-class Invoice(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    invoice_number = db.Column(db.String(50), unique=True, nullable=False)
-    issue_date = db.Column(db.Date, nullable=False, default=date.today)
-    due_date = db.Column(db.Date, nullable=True)
-    status = db.Column(db.String(20), nullable=False, default='Draft')  # e.g., Draft, Sent, Paid
-    
-    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    
-    line_items = db.relationship('LineItem', backref='invoice', lazy=True, cascade="all, delete-orphan")
-
-    @property
-    def total_amount(self):
-        return sum(item.amount for item in self.line_items)
-
-class LineItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(200), nullable=False)
-    quantity = db.Column(db.Float, nullable=False, default=1)
-    unit_price = db.Column(db.Float, nullable=False)
-    
-    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
-
-    # Establishes a one-to-one link from a LineItem back to a Task
-    task = db.relationship('Task', backref='line_item', uselist=False)
-
-    @property
-    def amount(self):
-        return self.quantity * self.unit_price
-    
-class InvoiceSequence(db.Model):
-    """
-    A simple table to store the next available invoice number to prevent race conditions
-    and ensure sequential numbering. It should only ever contain one row.
-    """
-    id = db.Column(db.Integer, primary_key=True)
-    next_invoice_num = db.Column(db.Integer, nullable=False, default=1)
+# Create a Blueprint
+main = Blueprint('main', __name__)
 
 # -----------------------
 # Routes
 # -----------------------
 
-@app.route('/')
+@main.route('/')
 @login_required
 def index():
     return redirect(url_for('dashboard'))
 
-@app.route('/projects', methods=['GET', 'POST'])
+@main.route('/projects', methods=['GET', 'POST'])
 @login_required
 def projects():
     if request.method == 'POST':
@@ -225,7 +69,7 @@ def projects():
 
     return render_template('projects.html', projects=all_projects, clients=all_clients, new_client_id=new_client_id)
 
-@app.route('/project/<int:project_id>')
+@main.route('/project/<int:project_id>')
 @login_required
 def project_detail(project_id):
 
@@ -233,7 +77,7 @@ def project_detail(project_id):
     # The tasks are automatically available via the 'project.tasks' relationship we defined
     return render_template('project_detail.html', project=project, date=date)
 
-@app.route('/delete_project/<int:project_id>', methods=['POST'])
+@main.route('/delete_project/<int:project_id>', methods=['POST'])
 @login_required
 def delete_project(project_id):
     project_to_delete = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
@@ -241,7 +85,7 @@ def delete_project(project_id):
     db.session.commit()
     return redirect(url_for('projects'))
 
-@app.route('/project/<int:project_id>/update-details', methods=['POST'])
+@main.route('/project/<int:project_id>/update-details', methods=['POST'])
 @login_required
 def update_project_details(project_id):
     """ Handles updating core project details via AJAX, like the title. """
@@ -259,7 +103,7 @@ def update_project_details(project_id):
     return {'success': True, 'new_title': project.title}
 
 # --- REPLACE the old 'add_task' function with this new version ---
-@app.route('/add_task/<int:project_id>', methods=['POST'])
+@main.route('/add_task/<int:project_id>', methods=['POST'])
 @login_required
 def add_task(project_id):
     """
@@ -303,7 +147,7 @@ def add_task(project_id):
         
     return redirect(url_for('project_detail', project_id=project.id))
 
-@app.route('/toggle_task/<int:task_id>', methods=['POST'])
+@main.route('/toggle_task/<int:task_id>', methods=['POST'])
 @login_required
 def toggle_task(task_id):
     """
@@ -318,7 +162,7 @@ def toggle_task(task_id):
     return {'success': True, 'is_completed': task.is_completed}
 
 # --- ROUTE to handle deleting a task ---
-@app.route('/task/<int:task_id>/delete', methods=['POST'])
+@main.route('/task/<int:task_id>/delete', methods=['POST'])
 @login_required
 def delete_task(task_id):
     """ Handles the deletion of a single task. """
@@ -330,7 +174,7 @@ def delete_task(task_id):
     return redirect(url_for('project_detail', project_id=project_id))
 
 # --- to handle deleting a time entry ---
-@app.route('/time-entry/<int:entry_id>/delete', methods=['POST'])
+@main.route('/time-entry/<int:entry_id>/delete', methods=['POST'])
 @login_required
 def delete_time_entry(entry_id):
     """ Handles the deletion of a single time entry. """
@@ -348,7 +192,7 @@ def delete_time_entry(entry_id):
     return redirect(url_for('project_detail', project_id=project_id))
 
 # --- UNIFIED ROUTE for updating all task details ---
-@app.route('/task/<int:task_id>/update', methods=['POST'])
+@main.route('/task/<int:task_id>/update', methods=['POST'])
 @login_required
 def update_task(task_id):
     """
@@ -375,7 +219,7 @@ def update_task(task_id):
     flash(f'Task "{task.description}" has been updated.', 'success')
     return redirect(url_for('project_detail', project_id=task.project_id))
 
-@app.route('/clients', methods=['GET', 'POST'])
+@main.route('/clients', methods=['GET', 'POST'])
 @login_required
 def clients():
     # Check for the 'next' argument in the URL for the GET request
@@ -403,7 +247,7 @@ def clients():
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
     return render_template('clients.html', clients=all_clients, next_url=next_url)
 
-@app.route('/delete_client/<int:client_id>', methods=['POST'])
+@main.route('/delete_client/<int:client_id>', methods=['POST'])
 @login_required
 def delete_client(client_id):
     client_to_delete = Client.query.filter_by(id=client_id, user_id=current_user.id).first_or_404()
@@ -417,7 +261,7 @@ def delete_client(client_id):
         
     return redirect(url_for('clients'))
 
-@app.route('/login', methods=['GET', 'POST'])
+@main.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -430,7 +274,7 @@ def login():
             flash('Invalid credentials. Please try again.', 'danger')
     return render_template('login.html')
 
-@app.route('/register', methods=['GET', 'POST'])
+@main.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -469,13 +313,13 @@ def register():
         
     return render_template('register.html')
 
-@app.route('/logout')
+@main.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('login'))
 
-@app.route('/invoices')
+@main.route('/invoices')
 @login_required
 def invoices():
     all_invoices = Invoice.query.filter_by(user_id=current_user.id).order_by(Invoice.issue_date.desc()).all()
@@ -483,7 +327,7 @@ def invoices():
 
     return render_template('invoices.html', invoices=all_invoices, projects=all_projects)
 
-@app.route('/create-invoice', methods=['POST'])
+@main.route('/create-invoice', methods=['POST'])
 @login_required
 def create_invoice():
     # Get project_id from the form submission
@@ -510,13 +354,13 @@ def create_invoice():
     flash(f'Invoice {invoice_number} created for project {project.title}.', 'success')
     return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
 
-@app.route('/invoice/<int:invoice_id>')
+@main.route('/invoice/<int:invoice_id>')
 @login_required
 def invoice_detail(invoice_id):
     invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
     return render_template('invoice_detail.html', invoice=invoice)
 
-@app.route('/invoice/<int:invoice_id>/add-item', methods=['POST'])
+@main.route('/invoice/<int:invoice_id>/add-item', methods=['POST'])
 @login_required
 def add_line_item(invoice_id):
     invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
@@ -540,7 +384,7 @@ def add_line_item(invoice_id):
         
     return redirect(url_for('invoice_detail', invoice_id=invoice.id))
 
-@app.route('/invoice/update-status/<int:invoice_id>', methods=['POST'])
+@main.route('/invoice/update-status/<int:invoice_id>', methods=['POST'])
 @login_required
 def update_invoice_status(invoice_id):
     invoice = Invoice.query.filter_by(id=invoice_id, user_id=current_user.id).first_or_404()
@@ -557,7 +401,7 @@ def update_invoice_status(invoice_id):
     flash(f'Invoice {invoice.invoice_number} has been updated.', 'success')
     return redirect(url_for('invoices'))
 
-@app.route('/dashboard')
+@main.route('/dashboard')
 @login_required
 def dashboard():
     # 1. Calculate Total Revenue (sum of all 'Paid' invoices)
@@ -594,7 +438,7 @@ def dashboard():
         revenue_by_client=revenue_by_client
     )
 
-@app.route('/project/<int:project_id>/save-notes', methods=['POST'])
+@main.route('/project/<int:project_id>/save-notes', methods=['POST'])
 @login_required
 def save_notes(project_id):
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
@@ -607,7 +451,7 @@ def save_notes(project_id):
     flash('Project notes have been saved.', 'success')
     return redirect(url_for('project_detail', project_id=project.id))
 
-@app.route('/login/google')
+@main.route('/login/google')
 def google_login():
 
     # Generate a nonce for OIDC to prevent replay attacks
@@ -617,7 +461,7 @@ def google_login():
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri, nonce=nonce)
 
-@app.route('/login/google/callback')
+@main.route('/login/google/callback')
 def google_callback():
     token = google.authorize_access_token()
 
@@ -648,7 +492,7 @@ def google_callback():
     flash('You have been successfully logged in with Google.', 'success')
     return redirect(url_for('dashboard'))
 
-@app.route('/invoice/<int:invoice_id>/download-pdf')
+@main.route('/invoice/<int:invoice_id>/download-pdf')
 @login_required
 def download_pdf(invoice_id):
     # 1. Fetch the correct invoice from the database
@@ -669,7 +513,7 @@ def download_pdf(invoice_id):
 
 # NEW ROUTES FOR TIME TRACKING
 # --- REPLACEED the old 'log_time' function with this new AJAX-ready version ---
-@app.route('/task/<int:task_id>/log-time', methods=['POST'])
+@main.route('/task/<int:task_id>/log-time', methods=['POST'])
 @login_required
 def log_time(task_id):
     """ Handles logging a new time entry for a task via an AJAX request. """
@@ -704,7 +548,7 @@ def log_time(task_id):
         'total_hours': task.total_hours_logged
     }
 
-@app.route('/task/<int:task_id>/quick-log', methods=['POST'])
+@main.route('/task/<int:task_id>/quick-log', methods=['POST'])
 @login_required
 def quick_log_time(task_id):
     # This is a simplified "timer" - for now, it just logs a preset amount of time.
@@ -722,7 +566,7 @@ def quick_log_time(task_id):
     
     return {'success': True, 'total_hours': task.total_hours_logged}
 
-@app.route('/task/<int:task_id>/update-billing', methods=['POST'])
+@main.route('/task/<int:task_id>/update-billing', methods=['POST'])
 @login_required
 def update_task_billing(task_id):
     task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
@@ -746,7 +590,7 @@ def update_task_billing(task_id):
     return redirect(url_for('project_detail', project_id=task.project_id))
 
 # --- ROUTE FOR SMART INVOICE GENERATION ---
-@app.route('/project/<int:project_id>/generate-invoice', methods=['POST'])
+@main.route('/project/<int:project_id>/generate-invoice', methods=['POST'])
 @login_required
 def generate_invoice(project_id):
     """
@@ -855,9 +699,3 @@ def generate_invoice(project_id):
         app.logger.error(f"Error generating invoice for project {project.id}: {e}", exc_info=True)
         flash('An unexpected error occurred while generating the invoice. Please try again.', 'danger')
         return redirect(url_for('project_detail', project_id=project.id))
-
-# -----------------------
-# Main
-# -----------------------
-if __name__ == '__main__':
-    app.run(debug=True)

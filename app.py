@@ -118,6 +118,9 @@ class Task(db.Model):
 
     # Relationship to Time Entries
     time_entries = db.relationship('TimeEntry', backref='task', lazy=True, cascade="all, delete-orphan")
+    line_item_id = db.Column(db.Integer, db.ForeignKey('line_item.id'), nullable=True)
+
+    quantity_is_na = db.Column(db.Boolean, default=False, nullable=False)
 
     # NEW HELPER PROPERTY
     @property
@@ -154,9 +157,20 @@ class LineItem(db.Model):
     
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
 
+    # Establishes a one-to-one link from a LineItem back to a Task
+    task = db.relationship('Task', backref='line_item', uselist=False)
+
     @property
     def amount(self):
         return self.quantity * self.unit_price
+    
+class InvoiceSequence(db.Model):
+    """
+    A simple table to store the next available invoice number to prevent race conditions
+    and ensure sequential numbering. It should only ever contain one row.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    next_invoice_num = db.Column(db.Integer, nullable=False, default=1)
 
 # -----------------------
 # Routes
@@ -167,7 +181,6 @@ class LineItem(db.Model):
 def index():
     return redirect(url_for('dashboard'))
 
-# START: Replacement Function
 @app.route('/projects', methods=['GET', 'POST'])
 @login_required
 def projects():
@@ -203,7 +216,7 @@ def projects():
         db.session.add(new_project)
         db.session.commit()
         flash(f'Project "{title}" created successfully.', 'success')
-        return redirect(url_for('projects'))
+        return redirect(url_for('project_detail', project_id=new_project.id))
 
     # This part handles the GET request (loading the page)
     new_client_id = request.args.get('new_client_id', type=int)
@@ -211,7 +224,6 @@ def projects():
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
 
     return render_template('projects.html', projects=all_projects, clients=all_clients, new_client_id=new_client_id)
-# END: Replacement Function
 
 @app.route('/project/<int:project_id>')
 @login_required
@@ -229,35 +241,139 @@ def delete_project(project_id):
     db.session.commit()
     return redirect(url_for('projects'))
 
+@app.route('/project/<int:project_id>/update-details', methods=['POST'])
+@login_required
+def update_project_details(project_id):
+    """ Handles updating core project details via AJAX, like the title. """
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    new_title = data.get('project_title')
+
+    if not new_title:
+        return {'success': False, 'message': 'Title cannot be empty.'}, 400
+
+    project.title = new_title
+    db.session.commit()
+    
+    return {'success': True, 'new_title': project.title}
+
+# --- REPLACE the old 'add_task' function with this new version ---
 @app.route('/add_task/<int:project_id>', methods=['POST'])
 @login_required
 def add_task(project_id):
-
+    """
+    Handles adding a new task to a project, including its
+    billing details which are determined by the project's billing type.
+    """
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
-    
     task_description = request.form.get('task_description')
     
-    if task_description:
-        new_task = Task(
-            description=task_description,
-            project_id=project.id,
-            user_id=current_user.id
-        )
-        db.session.add(new_task)
-        db.session.commit()
-        flash('New task added!', 'success')
+    if not task_description:
+        flash('Task description cannot be empty.', 'warning')
+        return redirect(url_for('project_detail', project_id=project.id))
+
+    # Create the new task with its description
+    new_task = Task(
+        description=task_description,
+        project_id=project.id,
+        user_id=current_user.id
+    )
+
+    # Add billing details based on the project's type
+    if project.billing_type == 'Hourly':
+        override_rate = request.form.get('override_rate')
+        # Only save the override rate if the user actually entered one
+        if override_rate:
+            new_task.override_rate = float(override_rate)
+
+    elif project.billing_type == 'Per Task':
+        task_fee = request.form.get('task_fee')
+        quantity = request.form.get('quantity', 1) # Default to 1 if not provided
+        
+        if task_fee:
+            new_task.task_fee = float(task_fee)
+        new_task.quantity = int(quantity)
+        new_task.quantity_is_na = 'quantity_is_na' in request.form
+
+    # Add the new task to the database session and commit
+    db.session.add(new_task)
+    db.session.commit()
+    flash('New task added!', 'success')
         
     return redirect(url_for('project_detail', project_id=project.id))
 
 @app.route('/toggle_task/<int:task_id>', methods=['POST'])
 @login_required
 def toggle_task(task_id):
+    """
+    Handles toggling the completion status of a single task.
+    This is called by a JavaScript fetch request.
+    """
     task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
     # Flip the boolean value
     task.is_completed = not task.is_completed
     db.session.commit()
-    # Return a success response
+    # Return a JSON response for the JavaScript to read
     return {'success': True, 'is_completed': task.is_completed}
+
+# --- ROUTE to handle deleting a task ---
+@app.route('/task/<int:task_id>/delete', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    """ Handles the deletion of a single task. """
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+    project_id = task.project_id
+    db.session.delete(task)
+    db.session.commit()
+    flash('Task has been deleted.', 'success')
+    return redirect(url_for('project_detail', project_id=project_id))
+
+# --- to handle deleting a time entry ---
+@app.route('/time-entry/<int:entry_id>/delete', methods=['POST'])
+@login_required
+def delete_time_entry(entry_id):
+    """ Handles the deletion of a single time entry. """
+    entry = TimeEntry.query.get_or_404(entry_id)
+    
+    # Security check: ensure the entry belongs to a task owned by the current user
+    if entry.task.user_id != current_user.id:
+        flash('You are not authorized to delete this entry.', 'danger')
+        return redirect(url_for('projects'))
+
+    project_id = entry.task.project_id
+    db.session.delete(entry)
+    db.session.commit()
+    flash('Time entry has been deleted.', 'success')
+    return redirect(url_for('project_detail', project_id=project_id))
+
+# --- UNIFIED ROUTE for updating all task details ---
+@app.route('/task/<int:task_id>/update', methods=['POST'])
+@login_required
+def update_task(task_id):
+    """
+    A single route to handle all updates for a task, including
+    description, billing details, and other properties.
+    """
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+
+    # Update the task's description
+    task.description = request.form.get('description')
+
+    # Update billing details based on the project type
+    if task.project.billing_type == 'Hourly':
+        # Allow setting the override_rate to empty, which means use project default
+        override_rate = request.form.get('override_rate')
+        task.override_rate = float(override_rate) if override_rate else None
+
+    elif task.project.billing_type == 'Per Task':
+        task.task_fee = float(request.form.get('task_fee'))
+        task.quantity = int(request.form.get('quantity'))
+        task.quantity_is_na = 'quantity_is_na' in request.form
+
+    db.session.commit()
+    flash(f'Task "{task.description}" has been updated.', 'success')
+    return redirect(url_for('project_detail', project_id=task.project_id))
 
 @app.route('/clients', methods=['GET', 'POST'])
 @login_required
@@ -551,34 +667,42 @@ def download_pdf(invoice_id):
 
     return response
 
-# ADD THESE NEW ROUTES FOR TIME TRACKING
-
+# NEW ROUTES FOR TIME TRACKING
+# --- REPLACEED the old 'log_time' function with this new AJAX-ready version ---
 @app.route('/task/<int:task_id>/log-time', methods=['POST'])
 @login_required
 def log_time(task_id):
+    """ Handles logging a new time entry for a task via an AJAX request. """
     task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
     
-    # Ensure the project is hourly
     if task.project.billing_type != 'Hourly':
-        flash('Time can only be logged for hourly projects.', 'danger')
-        return redirect(url_for('project_detail', project_id=task.project_id))
+        # Return an error as JSON
+        return {'success': False, 'message': 'Time can only be logged for hourly projects.'}, 400
 
     hours_worked = request.form.get('hours_worked')
     entry_date_str = request.form.get('entry_date')
 
-    if hours_worked:
-        new_entry = TimeEntry(
-            hours_worked=float(hours_worked),
-            entry_date=datetime.strptime(entry_date_str, '%Y-%m-%d').date() if entry_date_str else date.today(),
-            task_id=task.id
-        )
-        db.session.add(new_entry)
-        db.session.commit()
-        flash(f'{hours_worked} hours logged for task "{task.description}".', 'success')
-    else:
-        flash('Please enter the number of hours worked.', 'warning')
+    if not hours_worked:
+        return {'success': False, 'message': 'Please enter the number of hours worked.'}, 400
 
-    return redirect(url_for('project_detail', project_id=task.project_id))
+    new_entry = TimeEntry(
+        hours_worked=float(hours_worked),
+        entry_date=datetime.strptime(entry_date_str, '%Y-%m-%d').date() if entry_date_str else date.today(),
+        task_id=task.id
+    )
+    db.session.add(new_entry)
+    db.session.commit()
+
+    # Return the new entry's data and the new total hours as JSON
+    return {
+        'success': True,
+        'entry': {
+            'id': new_entry.id,
+            'hours': new_entry.hours_worked,
+            'date': new_entry.entry_date.strftime('%Y-%m-%d')
+        },
+        'total_hours': task.total_hours_logged
+    }
 
 @app.route('/task/<int:task_id>/quick-log', methods=['POST'])
 @login_required
@@ -620,6 +744,117 @@ def update_task_billing(task_id):
     db.session.commit()
     flash(f'Billing details for task "{task.description}" have been updated.', 'success')
     return redirect(url_for('project_detail', project_id=task.project_id))
+
+# --- ROUTE FOR SMART INVOICE GENERATION ---
+@app.route('/project/<int:project_id>/generate-invoice', methods=['POST'])
+@login_required
+def generate_invoice(project_id):
+    """
+    Generates a new invoice from all completed, unbilled tasks for a project.
+    This version is production-grade, handling race conditions and edge cases.
+    """
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
+
+    # With SQLite's default transaction isolation, the entire database is locked
+    # on write, which prevents race conditions for this operation.
+    try:
+        # Step 1: Find all tasks that are ready to be billed.
+        tasks_to_bill = Task.query.filter_by(
+            project_id=project.id,
+            is_completed=True,
+            is_billable=True,
+            has_been_billed=False
+        ).all()
+
+        if not tasks_to_bill:
+            flash('No completed, unbilled tasks are available to invoice.', 'warning')
+            return redirect(url_for('project_detail', project_id=project.id))
+
+        # Step 2: Pre-process tasks to generate potential line items.
+        line_items_to_create = []
+        if project.billing_type == 'Flat Fee':
+            tasks_summary = '; '.join([task.description for task in tasks_to_bill])
+            if len(tasks_summary) > 195:
+                tasks_summary = tasks_summary[:195] + '...'
+            
+            line_items_to_create.append({
+                'description': f'Project: {project.title} - {tasks_summary}',
+                'quantity': 1,
+                'unit_price': project.flat_fee_amount or 0.0,
+                'tasks_to_link': tasks_to_bill # Link all tasks to this one item
+            })
+
+        elif project.billing_type == 'Hourly':
+            for task in tasks_to_bill:
+                if task.total_hours_logged > 0:
+                    rate = task.override_rate or project.hourly_rate or 0.0
+                    line_items_to_create.append({
+                        'description': task.description,
+                        'quantity': task.total_hours_logged,
+                        'unit_price': rate,
+                        'tasks_to_link': [task] # Link one task to this item
+                    })
+
+        elif project.billing_type == 'Per Task':
+            for task in tasks_to_bill:
+                if task.task_fee and task.task_fee > 0:
+                    line_items_to_create.append({
+                        'description': task.description,
+                        'quantity': task.quantity or 1,
+                        'unit_price': task.task_fee,
+                        'tasks_to_link': [task]
+                    })
+        else:
+            raise ValueError(f"Unknown billing type: {project.billing_type}")
+        
+        # Step 3: Check if any valid line items were generated.
+        if not line_items_to_create:
+            flash('No tasks with billable hours or fees were found.', 'info')
+            return redirect(url_for('project_detail', project_id=project.id))
+
+        # Step 4: Atomically get the next invoice number.
+        sequence = InvoiceSequence.query.first()
+        if not sequence:
+            sequence = InvoiceSequence(next_invoice_num=1)
+            db.session.add(sequence)
+        
+        invoice_num = sequence.next_invoice_num
+        sequence.next_invoice_num += 1
+        invoice_number_str = f'INV-{invoice_num:04d}'
+
+        # Step 5: Create the invoice and line items.
+        new_invoice = Invoice(
+            invoice_number=invoice_number_str,
+            project_id=project.id,
+            user_id=current_user.id
+        )
+        db.session.add(new_invoice)
+
+        for item_data in line_items_to_create:
+            line_item = LineItem(
+                description=item_data['description'],
+                quantity=item_data['quantity'],
+                unit_price=item_data['unit_price'],
+                invoice=new_invoice
+            )
+            db.session.add(line_item)
+            db.session.flush() # Flush to get the line_item's ID
+            # Mark all associated tasks as billed and link them.
+            for task in item_data['tasks_to_link']:
+                task.has_been_billed = True
+                task.line_item_id = line_item.id
+        
+        # Step 6: Commit the transaction.
+        db.session.commit()
+        flash(f'Successfully generated Invoice {new_invoice.invoice_number}!', 'success')
+        return redirect(url_for('invoice_detail', invoice_id=new_invoice.id))
+
+    except Exception as e:
+        db.session.rollback()
+        # Use Flask's logger for better production debugging.
+        app.logger.error(f"Error generating invoice for project {project.id}: {e}", exc_info=True)
+        flash('An unexpected error occurred while generating the invoice. Please try again.', 'danger')
+        return redirect(url_for('project_detail', project_id=project.id))
 
 # -----------------------
 # Main

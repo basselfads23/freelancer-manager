@@ -104,19 +104,31 @@
       </div>
 
       <table class="line-items-table">
+        <!-- START: Replacement for the table header -->
         <thead>
           <tr>
             <th>Description</th>
+            <!-- DYNAMIC HEADERS START -->
+            {% if invoice.project.billing_type == 'Hourly' %}
+            <th class="text-right">Hours</th>
+            <th class="text-right">Hourly Rate</th>
+            {% else %}
             <th class="text-right">Quantity</th>
             <th class="text-right">Unit Price</th>
+            {% endif %}
+            <!-- DYNAMIC HEADERS END -->
             <th class="text-right">Amount</th>
           </tr>
         </thead>
+        <!-- END: Replacement for the table header -->
         <tbody>
           {% for item in invoice.line_items %}
           <tr>
             <td>{{ item.description }}</td>
-            <td class="text-right">{{ item.quantity }}</td>
+            <td class="text-right">
+              {% if item.task and item.task.quantity_is_na %} N/A {% else %} {{
+              item.quantity }} {% endif %}
+            </td>
             <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
             <td class="text-right">${{ "%.2f"|format(item.amount) }}</td>
           </tr>

@@ -41,13 +41,13 @@
     <!-- Hourly Rate (Initially Hidden) -->
     <div class="col-md-4" id="hourly_rate_div">
       <label for="hourly_rate" class="form-label">Hourly Rate ($)</label>
-      <input type="number" name="hourly_rate" id="hourly_rate" class="form-control" step="0.01" placeholder="e.g., 50.00">
+      <input type="number" name="hourly_rate" id="hourly_rate" class="form-control" step="0.01" min="0.01" placeholder="e.g., 50.00">
     </div>
 
     <!-- Flat Fee (Initially Hidden) -->
     <div class="col-md-4" id="flat_fee_div" style="display: none;">
       <label for="flat_fee_amount" class="form-label">Flat Fee Amount ($)</label>
-      <input type="number" name="flat_fee_amount" id="flat_fee_amount" class="form-control" step="0.01" placeholder="e.g., 1500.00">
+      <input type="number" name="flat_fee_amount" id="flat_fee_amount" class="form-control" step="0.01" min="0.01" placeholder="e.g., 1500.00">
     </div>
 
     <!-- Deadline -->
@@ -73,11 +73,8 @@
         <div>
           <span class="badge bg-secondary mb-2">{{ project.client.name }}</span>
           <h5 class="mb-1">
-            <a
-              href="{{ url_for('project_detail', project_id=project.id) }}"
-              class="text-decoration-none text-dark"
-              >{{ project.title }}</a
-            >
+            {{ project.title }}
+                <span class="badge bg-info fw-normal ms-2">{{ project.billing_type }}</span>
           </h5>
           <p class="mb-1 text-muted">{{ project.description }}</p>
 
@@ -114,6 +111,8 @@
           {% else %}
           <span class="badge bg-secondary">No deadline set</span>
           {% endif %}
+
+          <a href="{{ url_for('project_detail', project_id=project.id) }}" class="btn btn-outline-primary btn-sm mt-2">View / Edit</a>
 
           <form
             action="{{ url_for('delete_project', project_id=project.id) }}"

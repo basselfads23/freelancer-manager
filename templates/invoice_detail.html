@@ -34,14 +34,23 @@
     </div>
     <div class="card-body">
         <table class="table">
+            <!-- START: Replacement for the table header -->
             <thead>
                 <tr>
                     <th>Description</th>
-                    <th class="text-center">Quantity</th>
-                    <th class="text-end">Unit Price</th>
+                    <!-- DYNAMIC HEADERS START -->
+                    {% if invoice.project.billing_type == 'Hourly' %}
+                        <th class="text-center">Hours</th>
+                        <th class="text-end">Hourly Rate</th>
+                    {% else %}
+                        <th class="text-center">Quantity</th>
+                        <th class="text-end">Unit Price</th>
+                    {% endif %}
+                    <!-- DYNAMIC HEADERS END -->
                     <th class="text-end">Amount</th>
                 </tr>
             </thead>
+            <!-- END: Replacement for the table header -->
             <tbody>
                 {% for item in invoice.line_items %}
                 <tr>
@@ -79,11 +88,11 @@
                     <div class="row">
                         <div class="col-6 mb-3">
                             <label for="quantity" class="form-label">Quantity</label>
-                            <input type="number" class="form-control" name="quantity" value="1" step="1" required>
+                            <input type="number" class="form-control" name="quantity" value="1" step="1" min="1" required>
                         </div>
                         <div class="col-6 mb-3">
                             <label for="unit_price" class="form-label">Unit Price ($)</label>
-                            <input type="number" class="form-control" name="unit_price" step="0.01" required>
+                            <input type="number" class="form-control" name="unit_price" step="0.01" min="0.01" required>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-primary">Add Item</button>

@@ -1,7 +1,39 @@
 {% extends "base.html" %} {% block title %}Project: {{ project.title }}{%
-endblock %} {% block content %}
+endblock %} {% block content %} {% set unbilled_tasks =
+project.tasks|selectattr('is_completed')|selectattr('has_been_billed',
+'equalto', false)|list %}
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0">Project: {{ project.title }}</h2>
+  <!-- START: New Click-to-Edit Project Title -->
+  <div id="projectTitleContainer" class="d-flex align-items-center gap-3">
+    <h2 class="mb-0">
+      Project: <span id="projectTitleDisplay">{{ project.title }}</span>
+    </h2>
+    <svg
+      id="editTitleIcon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="feather feather-edit-2"
+      style="cursor: pointer; color: #6c757d"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+    </svg>
+    <input
+      type="text"
+      id="projectTitleInput"
+      class="form-control form-control-lg"
+      value="{{ project.title }}"
+      style="display: none"
+    />
+  </div>
+  <!-- END: New Click-to-Edit Project Title -->
   <a href="{{ url_for('projects') }}" class="btn btn-secondary"
     >Back to All Projects</a
   >
@@ -19,57 +51,142 @@ endblock %} {% block content %}
   </div>
 </div>
 
+{% if unbilled_tasks %}
+<div class="card bg-light mb-4">
+  <div class="card-body text-center">
+    <h5 class="card-title">Ready to Bill</h5>
+    <p class="card-text">
+      You have {{ unbilled_tasks|length }} completed task(s) ready to be
+      invoiced.
+    </p>
+    <form
+      action="{{ url_for('generate_invoice', project_id=project.id) }}"
+      method="POST"
+    >
+      <button type="submit" class="btn btn-success btn-lg">
+        Generate Invoice from Tasks
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="card mb-4">
   <div class="card-header">Task Checklist</div>
   <div class="card-body">
+    <!-- START: Replacement for the "Add Task" form -->
     <form
       action="{{ url_for('add_task', project_id=project.id) }}"
       method="POST"
-      class="d-flex gap-2 mb-4"
+      class="card card-body bg-light mb-4"
     >
-      <input
-        type="text"
-        name="task_description"
-        class="form-control"
-        placeholder="Add a new task..."
-        required
-      />
-      <button type="submit" class="btn btn-primary">Add Task</button>
+      <div class="row g-2 align-items-end">
+        <!-- Task Description (Always Visible) -->
+        <div class="col-md-6">
+          <label for="task_description" class="form-label"
+            >New Task Description</label
+          >
+          <input
+            type="text"
+            name="task_description"
+            class="form-control"
+            placeholder="e.g., Design homepage mockups"
+            required
+          />
+        </div>
+
+        <!-- DYNAMIC BILLING INPUTS -->
+        <!-- For Hourly Projects -->
+        {% if project.billing_type == 'Hourly' %}
+        <div class="col-md-4">
+          <label for="override_rate" class="form-label"
+            >Override Rate ($)</label
+          >
+          <input
+            type="number"
+            name="override_rate"
+            class="form-control"
+            step="0.01"
+            min="0.01"
+            placeholder="Default: ${{ project.hourly_rate }}"
+          />
+        </div>
+        {% endif %}
+
+        <!-- For Per Task Projects -->
+        {% if project.billing_type == 'Per Task' %}
+        <div class="col-md-2">
+          <label for="task_fee" class="form-label">Task Fee ($)</label>
+          <input
+            type="number"
+            name="task_fee"
+            class="form-control"
+            step="0.01"
+            min="0.01"
+            placeholder="e.g., 250.00"
+          />
+        </div>
+        <div class="col-md-2">
+          <label for="quantity" class="form-label">Quantity</label>
+          <div class="input-group">
+            <input
+              type="number"
+              name="quantity"
+              id="quantityInput-new"
+              class="form-control"
+              value="1"
+              min="1"
+              step="1"
+            />
+            <div class="input-group-text">
+              <input
+                type="checkbox"
+                id="quantityNA-new"
+                class="form-check-input mt-0"
+                onchange="toggleQuantityNA('new')"
+              />
+              <label for="quantityNA-new" class="ms-2">N/A</label>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Submit Button -->
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">Add Task</button>
+        </div>
+      </div>
     </form>
+    <!-- END: Replacement for the "Add Task" form -->
 
     <ul class="list-group">
       {% for task in project.tasks %}
-      <!-- START: Replacement for the <li> element -->
+      <!-- START: Final Replacement for the <li> element -->
       <li class="list-group-item">
+        <!-- Main Task Display Row -->
         <div class="d-flex justify-content-between align-items-center">
-          <!-- Task Description and Checkbox -->
-          <div class="form-check">
-            <input
-              class="form-check-input"
-              type="checkbox"
-              value=""
-              id="task-{{ task.id }}"
-              {%
-              if
-              task.is_completed
-              %}checked{%
-              endif
-              %}
-              onchange="toggleTask({{ task.id }})"
-            />
-            <label
-              class="form-check-label {% if task.is_completed %}text-muted text-decoration-line-through{% endif %}"
-              for="task-{{ task.id }}"
+          <!-- Complete Button and Description -->
+          <div class="d-flex align-items-center gap-3">
+            <button
+              id="completeBtn-{{ task.id }}"
+              class="btn btn-sm {% if task.is_completed %}btn-success{% else %}btn-outline-success{% endif %}"
+              onclick="toggleTask({{ task.id }})"
+            >
+              {% if task.is_completed %}✓ Completed{% else %}Complete{% endif %}
+            </button>
+            <span
+              class="{% if task.is_completed %}text-muted text-decoration-line-through{% endif %}"
+              id="taskDesc-{{ task.id }}"
             >
               {{ task.description }}
-            </label>
+            </span>
           </div>
 
-          <!-- DYNAMIC CONTROLS based on Billing Type -->
-          <div>
-            <!-- HOURLY BILLING CONTROLS -->
+          <!-- Controls on the right -->
+          <div class="d-flex gap-2 align-items-center">
+            <!-- HOURLY BILLING: Show logged time & Log Time button -->
             {% if project.billing_type == 'Hourly' %}
-            <span class="badge bg-primary me-2"
+            <span class="badge bg-primary" id="totalHoursBadge-{{ task.id }}"
               >{{ task.total_hours_logged }} hrs logged</span
             >
             <button
@@ -79,7 +196,10 @@ endblock %} {% block content %}
             >
               Log Time
             </button>
-            {% elif project.billing_type == 'Per Task' %}
+            {% endif %}
+
+            <!-- PER TASK BILLING: Edit Billing button -->
+            {% if project.billing_type == 'Per Task' %}
             <button
               class="btn btn-sm btn-outline-secondary"
               data-bs-toggle="collapse"
@@ -88,33 +208,43 @@ endblock %} {% block content %}
               Edit Billing
             </button>
             {% endif %}
+
+            <!-- Delete Button -->
+            <form
+              action="{{ url_for('delete_task', task_id=task.id) }}"
+              method="POST"
+              onsubmit="return confirm('Are you sure you want to delete this task?');"
+            >
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                Delete
+              </button>
+            </form>
           </div>
         </div>
 
-        <!-- Collapsible Manual Time Log Form (for Hourly projects) -->
+        <!-- Collapsible Form for Manual Time Logging (Hourly projects) -->
         {% if project.billing_type == 'Hourly' %}
         <div class="collapse mt-3" id="manualLog-{{ task.id }}">
           <div class="card card-body bg-light">
             <form
-              action="{{ url_for('log_time', task_id=task.id) }}"
-              method="POST"
+              id="logTimeForm-{{ task.id }}"
+              onsubmit="handleLogTime(event, {{ task.id }})"
               class="row g-2 align-items-end"
             >
               <div class="col-md-5">
-                <label for="hours_worked" class="form-label-sm"
-                  >Hours Worked</label
-                >
-                <input
+                <label class="form-label-sm">Hours Worked</label
+                ><input
                   type="number"
                   name="hours_worked"
                   class="form-control form-control-sm"
                   step="0.01"
+                  min="0.01"
                   required
                 />
               </div>
               <div class="col-md-5">
-                <label for="entry_date" class="form-label-sm">Date</label>
-                <input
+                <label class="form-label-sm">Date</label
+                ><input
                   type="date"
                   name="entry_date"
                   class="form-control form-control-sm"
@@ -123,13 +253,48 @@ endblock %} {% block content %}
               </div>
               <div class="col-md-2">
                 <button type="submit" class="btn btn-sm btn-success w-100">
-                  Save
+                  Add
                 </button>
               </div>
             </form>
+
+            <!-- BLOCK to display the time entry history -->
+            <hr />
+            <h6 class="card-subtitle mb-2 text-muted">Logged Entries</h6>
+            <ul
+              class="list-group list-group-flush"
+              id="timeEntryList-{{ task.id }}"
+            >
+              {% for entry in task.time_entries %}
+              <li
+                class="list-group-item d-flex justify-content-between align-items-center p-1 bg-light"
+              >
+                <span
+                  >{{ entry.hours_worked }} hours on {{
+                  entry.entry_date.strftime('%Y-%m-%d') }}</span
+                >
+                <form
+                  action="{{ url_for('delete_time_entry', entry_id=entry.id) }}"
+                  method="POST"
+                  onsubmit="return confirm('Delete this time entry?');"
+                >
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    ×
+                  </button>
+                </form>
+              </li>
+              {% else %}
+              <li class="list-group-item p-1 bg-light fst-italic">
+                No time logged yet.
+              </li>
+              {% endfor %}
+            </ul>
           </div>
         </div>
-        {% endif %} {% if project.billing_type == 'Per Task' %}
+        {% endif %}
+
+        <!-- Collapsible Form for Per-Task Billing -->
+        {% if project.billing_type == 'Per Task' %}
         <div class="collapse mt-3" id="taskBilling-{{ task.id }}">
           <div class="card card-body bg-light">
             <form
@@ -137,26 +302,64 @@ endblock %} {% block content %}
               method="POST"
               class="row g-2 align-items-end"
             >
-              <div class="col-md-5">
-                <label for="task_fee" class="form-label-sm">Task Fee ($)</label>
+              <div class="col-md-4">
+                <label class="form-label-sm">Task Description</label>
+                <input
+                  type="text"
+                  name="description"
+                  class="form-control form-control-sm"
+                  value="{{ task.description }}"
+                  required
+                />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label-sm">Task Fee ($)</label>
                 <input
                   type="number"
                   name="task_fee"
                   class="form-control form-control-sm"
                   step="0.01"
+                  min="0.01"
                   value="{{ task.task_fee or '' }}"
-                  placeholder="e.g., 150.00"
                 />
               </div>
-              <div class="col-md-5">
-                <label for="quantity" class="form-label-sm">Quantity</label>
-                <input
-                  type="number"
-                  name="quantity"
-                  class="form-control form-control-sm"
-                  step="1"
-                  value="{{ task.quantity or 1 }}"
-                />
+              <div class="col-md-3">
+                <label class="form-label-sm">Quantity</label>
+                <div class="input-group input-group-sm">
+                  <input
+                    type="number"
+                    name="quantity"
+                    id="quantityInput-{{ task.id }}"
+                    class="form-control form-control-sm"
+                    value="{{ task.quantity or 1 }}"
+                    min="1"
+                    step="1"
+                    {%
+                    if
+                    task.quantity_is_na
+                    %}disabled{%
+                    endif
+                    %}
+                  />
+                  <div class="input-group-text">
+                    <input
+                      type="checkbox"
+                      name="quantity_is_na"
+                      id="quantityNA-{{ task.id }}"
+                      class="form-check-input mt-0"
+                      onchange="toggleQuantityNA('{{ task.id }}')"
+                      {%
+                      if
+                      task.quantity_is_na
+                      %}checked{%
+                      endif
+                      %}
+                    />
+                    <label for="quantityNA-{{ task.id }}" class="ms-2"
+                      >N/A</label
+                    >
+                  </div>
+                </div>
               </div>
               <div class="col-md-2">
                 <button type="submit" class="btn btn-sm btn-success w-100">
@@ -168,7 +371,7 @@ endblock %} {% block content %}
         </div>
         {% endif %}
       </li>
-      <!-- END: Replacement for the <li> element -->
+      <!-- END: Final Replacement -->
       {% else %}
       <li class="list-group-item text-center fst-italic">No tasks yet.</li>
       {% endfor %}
@@ -199,6 +402,7 @@ endblock %} {% block content %}
 </div>
 {% endblock %} {% block scripts %}
 <script>
+  // --- REPLACE your old toggleTask function with this new one ---
   function toggleTask(taskId) {
     fetch(`/toggle_task/${taskId}`, {
       method: "POST",
@@ -206,19 +410,148 @@ endblock %} {% block content %}
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {
-          // Find the label and toggle its style
-          const label = document.querySelector(`label[for="task-${taskId}"]`);
+          // Find the button and the description span by their unique IDs
+          const button = document.getElementById(`completeBtn-${taskId}`);
+          const description = document.getElementById(`taskDesc-${taskId}`);
+
           if (data.is_completed) {
-            label.classList.add("text-muted", "text-decoration-line-through");
+            // --- Update the UI to the "Completed" state ---
+            button.classList.remove("btn-outline-success");
+            button.classList.add("btn-success");
+            button.innerHTML = "✓ Completed";
+            description.classList.add(
+              "text-muted",
+              "text-decoration-line-through"
+            );
           } else {
-            label.classList.remove(
+            // --- Update the UI to the "Incomplete" state ---
+            button.classList.remove("btn-success");
+            button.classList.add("btn-outline-success");
+            button.innerHTML = "Complete";
+            description.classList.remove(
               "text-muted",
               "text-decoration-line-through"
             );
           }
-          // We can optionally update the main project progress bar here later
         }
       });
   }
+
+  // Add this new function inside the <script> tag at the bottom of the file
+
+  function toggleQuantityNA(taskId) {
+    // Construct the IDs for the checkbox and the number input
+    const checkbox = document.getElementById(`quantityNA-${taskId}`);
+    const quantityInput = document.getElementById(`quantityInput-${taskId}`);
+
+    if (checkbox.checked) {
+      // If "N/A" is checked, disable the input and set its value to 1
+      quantityInput.value = 1;
+      quantityInput.disabled = true;
+    } else {
+      // If unchecked, re-enable the input
+      quantityInput.disabled = false;
+    }
+  }
+
+  // Add this new function inside the <script> tag
+  function handleLogTime(event, taskId) {
+    // Prevent the default form submission which causes a page refresh
+    event.preventDefault();
+
+    const form = document.getElementById(`logTimeForm-${taskId}`);
+    const formData = new FormData(form);
+
+    fetch(`/task/${taskId}/log-time`, {
+      method: "POST",
+      body: formData,
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          // --- Update the UI dynamically ---
+
+          // 1. Update the total hours badge
+          const totalHoursBadge = document.getElementById(
+            `totalHoursBadge-${taskId}`
+          );
+          totalHoursBadge.innerText = `${data.total_hours} hrs logged`;
+
+          // 2. Create the new list item for the entry
+          const timeEntryList = document.getElementById(
+            `timeEntryList-${taskId}`
+          );
+          const newEntryHtml = `
+                <li class="list-group-item d-flex justify-content-between align-items-center p-1 bg-light">
+                    <span>${data.entry.hours} hours on ${data.entry.date}</span>
+                    <form action="/time-entry/${data.entry.id}/delete" method="POST" onsubmit="return confirm('Delete this time entry?');">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">×</button>
+                    </form>
+                </li>`;
+
+          // Add the new entry to the top of the list
+          timeEntryList.insertAdjacentHTML("afterbegin", newEntryHtml);
+
+          // 3. Clear the form inputs
+          form.reset();
+        } else {
+          // If the server returned an error, you could show an alert
+          alert("Error: " + data.message);
+        }
+      });
+  }
+
+  // --- CODE for inline project title editing ---
+  const titleContainer = document.getElementById("projectTitleContainer");
+  const titleDisplay = document.getElementById("projectTitleDisplay");
+  const titleInput = document.getElementById("projectTitleInput");
+  const editIcon = document.getElementById("editTitleIcon");
+
+  editIcon.addEventListener("click", () => {
+    // Switch to edit mode
+    titleDisplay.style.display = "none";
+    editIcon.style.display = "none";
+    titleInput.style.display = "block";
+    titleInput.focus();
+  });
+
+  // Function to save the new title
+  const saveProjectTitle = () => {
+    const newTitle = titleInput.value;
+    // Only save if the title has actually changed
+    if (newTitle && newTitle !== "{{ project.title }}") {
+      fetch("{{ url_for('update_project_details', project_id=project.id) }}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ project_title: newTitle }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.success) {
+            // Update the displayed title on success
+            titleDisplay.innerText = data.new_title;
+          } else {
+            alert("Error: " + data.message);
+          }
+        });
+    }
+    // Switch back to display mode
+    titleInput.style.display = "none";
+    titleDisplay.style.display = "inline";
+    editIcon.style.display = "inline-block";
+  };
+
+  // Save when the user clicks away (blur)
+  titleInput.addEventListener("blur", saveProjectTitle);
+
+  // Save when the user hits "Enter"
+  titleInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault(); // Prevent form submission
+      saveProjectTitle();
+    }
+  });
 </script>
 {% endblock %}

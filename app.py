@@ -74,6 +74,9 @@ class Project(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     notes = db.Column(db.Text, nullable=True)
+    billing_type = db.Column(db.String(50), nullable=False, default='Hourly') # Options: Hourly, Flat Fee, Per Task
+    hourly_rate = db.Column(db.Float, nullable=True)
+    flat_fee_amount = db.Column(db.Float, nullable=True)
 
 
     tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
@@ -101,6 +104,31 @@ class Task(db.Model):
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    # For Hourly Billing
+    override_rate = db.Column(db.Float, nullable=True)
+
+    # For Per-Task Billing
+    task_fee = db.Column(db.Float, nullable=True)
+    quantity = db.Column(db.Integer, nullable=True, default=1)
+
+    # For Invoice Generation
+    is_billable = db.Column(db.Boolean, default=True, nullable=False)
+    has_been_billed = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Relationship to Time Entries
+    time_entries = db.relationship('TimeEntry', backref='task', lazy=True, cascade="all, delete-orphan")
+
+    # NEW HELPER PROPERTY
+    @property
+    def total_hours_logged(self):
+        return sum(entry.hours_worked for entry in self.time_entries)
+    
+class TimeEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    hours_worked = db.Column(db.Float, nullable=False)
+    entry_date = db.Column(db.Date, nullable=False, default=date.today)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.id'), nullable=False)
 
 class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -139,39 +167,51 @@ class LineItem(db.Model):
 def index():
     return redirect(url_for('dashboard'))
 
-
+# START: Replacement Function
 @app.route('/projects', methods=['GET', 'POST'])
 @login_required
 def projects():
     if request.method == 'POST':
-        # This part for creating a project remains the same
+        # --- Get common form data ---
         title = request.form.get('title')
         description = request.form.get('description')
         deadline_str = request.form.get('deadline')
         client_id = request.form.get('client_id')
         deadline = datetime.strptime(deadline_str, '%Y-%m-%d').date() if deadline_str else None
+        
+        # --- Get NEW billing form data ---
+        billing_type = request.form.get('billing_type')
+        hourly_rate = request.form.get('hourly_rate')
+        flat_fee_amount = request.form.get('flat_fee_amount')
 
+        # --- Create new project object ---
         new_project = Project(
             title=title,
             description=description,
             deadline=deadline,
             client_id=client_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            billing_type=billing_type
         )
+        
+        # --- Set billing values based on type ---
+        if billing_type == 'Hourly':
+            new_project.hourly_rate = float(hourly_rate) if hourly_rate else 0.0
+        elif billing_type == 'Flat Fee':
+            new_project.flat_fee_amount = float(flat_fee_amount) if flat_fee_amount else 0.0
+
         db.session.add(new_project)
         db.session.commit()
+        flash(f'Project "{title}" created successfully.', 'success')
         return redirect(url_for('projects'))
 
-    # START MODIFICATION for handling the redirect
-    # Get the new client ID from the URL arguments, if it exists
+    # This part handles the GET request (loading the page)
     new_client_id = request.args.get('new_client_id', type=int)
-
     all_projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.deadline.asc()).all()
     all_clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
 
-    # Pass the new client ID to the template
     return render_template('projects.html', projects=all_projects, clients=all_clients, new_client_id=new_client_id)
-    # END MODIFICATION
+# END: Replacement Function
 
 @app.route('/project/<int:project_id>')
 @login_required
@@ -179,7 +219,7 @@ def project_detail(project_id):
 
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     # The tasks are automatically available via the 'project.tasks' relationship we defined
-    return render_template('project_detail.html', project=project)
+    return render_template('project_detail.html', project=project, date=date)
 
 @app.route('/delete_project/<int:project_id>', methods=['POST'])
 @login_required
@@ -510,6 +550,76 @@ def download_pdf(invoice_id):
     response.headers['Content-Disposition'] = f'attachment; filename=Invoice-{invoice.invoice_number}.pdf'
 
     return response
+
+# ADD THESE NEW ROUTES FOR TIME TRACKING
+
+@app.route('/task/<int:task_id>/log-time', methods=['POST'])
+@login_required
+def log_time(task_id):
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+    
+    # Ensure the project is hourly
+    if task.project.billing_type != 'Hourly':
+        flash('Time can only be logged for hourly projects.', 'danger')
+        return redirect(url_for('project_detail', project_id=task.project_id))
+
+    hours_worked = request.form.get('hours_worked')
+    entry_date_str = request.form.get('entry_date')
+
+    if hours_worked:
+        new_entry = TimeEntry(
+            hours_worked=float(hours_worked),
+            entry_date=datetime.strptime(entry_date_str, '%Y-%m-%d').date() if entry_date_str else date.today(),
+            task_id=task.id
+        )
+        db.session.add(new_entry)
+        db.session.commit()
+        flash(f'{hours_worked} hours logged for task "{task.description}".', 'success')
+    else:
+        flash('Please enter the number of hours worked.', 'warning')
+
+    return redirect(url_for('project_detail', project_id=task.project_id))
+
+@app.route('/task/<int:task_id>/quick-log', methods=['POST'])
+@login_required
+def quick_log_time(task_id):
+    # This is a simplified "timer" - for now, it just logs a preset amount of time.
+    # We can make this a real start/stop timer later if needed.
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+    
+    if task.project.billing_type != 'Hourly':
+        # This check is important for security
+        return {'success': False, 'message': 'Time can only be logged for hourly projects.'}
+
+    # For this example, a "quick log" adds 15 minutes (0.25 hours)
+    new_entry = TimeEntry(hours_worked=0.25, task_id=task.id)
+    db.session.add(new_entry)
+    db.session.commit()
+    
+    return {'success': True, 'total_hours': task.total_hours_logged}
+
+@app.route('/task/<int:task_id>/update-billing', methods=['POST'])
+@login_required
+def update_task_billing(task_id):
+    task = Task.query.filter_by(id=task_id, user_id=current_user.id).first_or_404()
+    
+    # Ensure the project is a Per Task project
+    if task.project.billing_type != 'Per Task':
+        flash('Task billing can only be updated for "Per Task" projects.', 'danger')
+        return redirect(url_for('project_detail', project_id=task.project_id))
+
+    task_fee = request.form.get('task_fee')
+    quantity = request.form.get('quantity')
+    
+    # Update values if they are provided in the form
+    if task_fee:
+        task.task_fee = float(task_fee)
+    if quantity:
+        task.quantity = int(quantity)
+
+    db.session.commit()
+    flash(f'Billing details for task "{task.description}" have been updated.', 'success')
+    return redirect(url_for('project_detail', project_id=task.project_id))
 
 # -----------------------
 # Main

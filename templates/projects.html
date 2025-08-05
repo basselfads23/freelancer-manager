@@ -1,46 +1,68 @@
 {% extends "base.html" %} {% block content %}
 <h2>Projects</h2>
 
+<!-- START: New Project Creation Form -->
 <form method="POST" class="mb-4 p-3 border rounded bg-white">
-  <div class="row g-3 align-items-end">
-    <div class="col-md-3">
+  <div class="row g-3">
+    <!-- Project Title -->
+    <div class="col-md-6">
+      <label for="title" class="form-label">Project Title</label>
+      <input type="text" name="title" id="title" class="form-control" required>
+    </div>
+
+    <!-- Client -->
+    <div class="col-md-6">
+      <label for="client_select" class="form-label">Client</label>
       <select name="client_id" id="client_select" class="form-select" required>
         <option value="" disabled selected>Select a client...</option>
         {% for client in clients %}
         <option value="{{ client.id }}" {% if client.id == new_client_id %}selected{% endif %}>{{ client.name }}</option>
         {% endfor %}
         <option value="add_new_client" style="font-weight: bold; border-top: 1px solid #ccc; padding-top: 5px;">+ Add New Client</option>
-
       </select>
     </div>
-    <div class="col-md-3">
-      <label for="title" class="form-label">Project Title</label>
-      <input
-        type="text"
-        name="title"
-        id="title"
-        class="form-control"
-        required
-      />
+
+    <!-- Description -->
+    <div class="col-12">
+      <label for="description" class="form-label">Description</label>
+      <input type="text" name="description" id="description" class="form-control">
     </div>
-    <div class="col-md-3">
-      <label for="description" class="form-label">Notes</label>
-      <input
-        type="text"
-        name="description"
-        id="description"
-        class="form-control"
-      />
+
+    <!-- Billing Type -->
+    <div class="col-md-4">
+      <label for="billing_type" class="form-label">Billing Type</label>
+      <select name="billing_type" id="billing_type" class="form-select">
+        <option value="Hourly">Hourly Rate</option>
+        <option value="Flat Fee">Flat Fee</option>
+        <option value="Per Task">Per Task</option>
+      </select>
     </div>
-    <div class="col-md-2">
+
+    <!-- Hourly Rate (Initially Hidden) -->
+    <div class="col-md-4" id="hourly_rate_div">
+      <label for="hourly_rate" class="form-label">Hourly Rate ($)</label>
+      <input type="number" name="hourly_rate" id="hourly_rate" class="form-control" step="0.01" placeholder="e.g., 50.00">
+    </div>
+
+    <!-- Flat Fee (Initially Hidden) -->
+    <div class="col-md-4" id="flat_fee_div" style="display: none;">
+      <label for="flat_fee_amount" class="form-label">Flat Fee Amount ($)</label>
+      <input type="number" name="flat_fee_amount" id="flat_fee_amount" class="form-control" step="0.01" placeholder="e.g., 1500.00">
+    </div>
+
+    <!-- Deadline -->
+    <div class="col-md-4">
       <label for="deadline" class="form-label">Deadline</label>
-      <input type="date" name="deadline" id="deadline" class="form-control" />
+      <input type="date" name="deadline" id="deadline" class="form-control">
     </div>
-    <div class="col-md-1">
-      <button type="submit" class="btn btn-primary w-100">Add</button>
+
+    <!-- Submit Button -->
+    <div class="col-12 text-end">
+      <button type="submit" class="btn btn-primary">Create Project</button>
     </div>
   </div>
 </form>
+<!-- END: New Project Creation Form -->
 
 <div class="card">
   <div class="card-header">Project List</div>
@@ -118,10 +140,27 @@
 
 {% block scripts %}
 <script>
+  // For the "+ Add New Client" dropdown option
   document.getElementById('client_select').addEventListener('change', function() {
     if (this.value === 'add_new_client') {
-      // If the user selects "Add New Client", redirect them.
       window.location.href = "{{ url_for('clients', next='projects') }}";
+    }
+  });
+
+  // For the dynamic billing type fields
+  document.getElementById('billing_type').addEventListener('change', function() {
+    const hourlyDiv = document.getElementById('hourly_rate_div');
+    const flatFeeDiv = document.getElementById('flat_fee_div');
+
+    if (this.value === 'Hourly') {
+      hourlyDiv.style.display = 'block';
+      flatFeeDiv.style.display = 'none';
+    } else if (this.value === 'Flat Fee') {
+      hourlyDiv.style.display = 'none';
+      flatFeeDiv.style.display = 'block';
+    } else { // Per Task
+      hourlyDiv.style.display = 'none';
+      flatFeeDiv.style.display = 'none';
     }
   });
 </script>

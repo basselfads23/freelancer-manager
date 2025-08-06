@@ -37,6 +37,7 @@ class Project(db.Model):
 
     tasks = db.relationship('Task', backref='project', lazy=True, cascade="all, delete-orphan")
     invoices = db.relationship('Invoice', backref='project', lazy=True, cascade="all, delete-orphan")
+    expenses = db.relationship('Expense', backref='project', lazy=True, cascade="all, delete-orphan")
 
     @property
     def days_left(self):
@@ -127,3 +128,19 @@ class InvoiceSequence(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     next_invoice_num = db.Column(db.Integer, nullable=False, default=1)
+
+class ExpenseCategory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    expenses = db.relationship('Expense', backref='category', lazy=True)
+
+class Expense(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    date = db.Column(db.Date, nullable=False, default=date.today)
+
+    # Foreign keys to link the expense to other parts of the app
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('expense_category.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

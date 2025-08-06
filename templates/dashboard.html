@@ -4,6 +4,12 @@ content %}
 
 <div class="row">
   <div class="col-md-4">
+    <div class="card text-white bg-success mb-3"></div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-3">
     <div class="card text-white bg-success mb-3">
       <div class="card-header">Total Revenue (Paid)</div>
       <div class="card-body">
@@ -11,7 +17,7 @@ content %}
       </div>
     </div>
   </div>
-  <div class="col-md-4">
+  <div class="col-md-3">
     <div class="card text-dark bg-warning mb-3">
       <div class="card-header">Outstanding Revenue (Sent)</div>
       <div class="card-body">
@@ -19,11 +25,19 @@ content %}
       </div>
     </div>
   </div>
-  <div class="col-md-4">
-    <div class="card text-dark bg-light mb-3">
-      <div class="card-header">Total Invoiced</div>
+  <div class="col-md-3">
+    <div class="card text-white bg-danger mb-3">
+      <div class="card-header">Total Expenses</div>
       <div class="card-body">
-        <h4 class="card-title">${{ "%.2f"|format(total_invoiced) }}</h4>
+        <h4 class="card-title">${{ "%.2f"|format(total_expenses) }}</h4>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-white bg-primary mb-3">
+      <div class="card-header">Net Profit</div>
+      <div class="card-body">
+        <h4 class="card-title">${{ "%.2f"|format(net_profit) }}</h4>
       </div>
     </div>
   </div>

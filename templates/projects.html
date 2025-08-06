@@ -112,10 +112,10 @@
           <span class="badge bg-secondary">No deadline set</span>
           {% endif %}
 
-          <a href="{{ url_for('main.project_detail', project_id=project.id) }}" class="btn btn-outline-primary btn-sm mt-2">View / Edit</a>
+          <a href="{{ url_for('projects.project_detail', project_id=project.id) }}" class="btn btn-outline-primary btn-sm mt-2">View / Edit</a>
 
           <form
-            action="{{ url_for('main.delete_project', project_id=project.id) }}"
+            action="{{ url_for('projects.delete_project', project_id=project.id) }}"
             method="POST"
             class="d-inline"
             onsubmit="return confirm('Are you sure you want to delete this project?');"
@@ -142,7 +142,7 @@
   // For the "+ Add New Client" dropdown option
   document.getElementById('client_select').addEventListener('change', function() {
     if (this.value === 'add_new_client') {
-      window.location.href = "{{ url_for('main.clients', next='projects') }}";
+      window.location.href = "{{ url_for('clients.clients', next='projects') }}";
     }
   });
 

@@ -6,7 +6,7 @@ content %}
   <div class="card-body">
     <h5 class="card-title">Create New Invoice</h5>
     <form
-      action="{{ url_for('main.create_invoice') }}"
+      action="{{ url_for('invoices.create_invoice') }}"
       method="POST"
       class="row g-3 align-items-end"
     >
@@ -53,7 +53,7 @@ content %}
           <td><span class="badge bg-primary">{{ invoice.status }}</span></td>
           <td>
             <a
-              href="{{ url_for('main.invoice_detail', invoice_id=invoice.id) }}"
+              href="{{ url_for('invoices.invoice_detail', invoice_id=invoice.id) }}"
               class="btn btn-sm btn-outline-secondary"
               >View</a
             >

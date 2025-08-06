@@ -8,8 +8,14 @@ from dotenv import load_dotenv
 from .extensions import db, migrate, login_manager, oauth
 # Import models so Flask-Migrate can see them
 from .models import User
-# Import the Blueprint
-from .routes import main
+
+# Import Blueprints from the routes package
+from .routes.main_routes import main
+from .routes.auth_routes import auth_bp
+from .routes.project_routes import project_bp
+from .routes.client_routes import client_bp
+from .routes.invoice_routes import invoice_bp
+from .routes.expenses_routes import expenses_bp
 
 load_dotenv()
 
@@ -30,7 +36,7 @@ def create_app():
     oauth.init_app(app)
 
     # --- Configure Login Manager ---
-    login_manager.login_view = 'main.login' # Note: 'main.' prefix for Blueprint
+    login_manager.login_view = 'auth.login'
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
@@ -41,12 +47,15 @@ def create_app():
         client_id=app.config['GOOGLE_CLIENT_ID'],
         client_secret=app.config['GOOGLE_CLIENT_SECRET'],
         server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-        client_kwargs={
-            'scope': 'openid email profile'
-        }
+        client_kwargs={'scope': 'openid email profile'}
     )
 
     # --- Register Blueprints ---
     app.register_blueprint(main)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(project_bp)
+    app.register_blueprint(client_bp)
+    app.register_blueprint(invoice_bp)
+    app.register_blueprint(expenses_bp)
 
     return app
